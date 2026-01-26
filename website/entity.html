@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dettaglio Entità - Archivio Teatro Regio</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Neo4j Javascript Driver -->
+    <script src="https://unpkg.com/neo4j-driver"></script>
+    
+    <!-- Font e Icone -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --primary-color: #cf171c;
+            --secondary-color: #1a171a;
+            --gray-light: #f3f4f6;
+            --text-dark: #1f2937;
+        }
+
+        body { font-family: 'Inter', sans-serif; color: var(--text-dark); background-color: #ffffff; }
+        h1, h2, h3, .serif { font-family: 'Playfair Display', serif; }
+
+        .typog-header2 { font-size: 2rem; line-height: 1.2; font-weight: 500; }
+        
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: "/";
+            padding: 0 0.5rem;
+            color: #9ca3af;
+        }
+
+        /* Loading Skeleton Animation */
+        .skeleton:not(.loaded) {
+            background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        
+        /* Stato finale (caricato) */
+        .skeleton.loaded {
+            background: #f3f4f6 !important;
+            animation: none !important;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Status Indicator (Login Check) */
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .online { background-color: #10b981; }
+        .offline { background-color: #ef4444; }
+
+        .modal { transition: opacity 0.3s ease, visibility 0.3s ease; opacity: 0; visibility: hidden; z-index: 50; }
+        .modal.open { opacity: 1; visibility: visible; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- LOGIN MODAL (Se disconnesso) -->
+    <div id="login-modal" class="modal fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[100]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 border border-gray-100">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+                    <i data-lucide="lock" class="w-8 h-8 text-[var(--primary-color)]"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900 serif">Accesso Richiesto</h2>
+                <p class="text-sm text-gray-500 mt-2">Per visualizzare i dettagli, connettiti al database.</p>
+            </div>
+            <form id="db-login-form" class="space-y-5">
+                <input type="text" id="input-uri" value="bolt://archiuidev.promemoriagroup.com:7687" class="hidden">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Utente</label>
+                    <input type="text" id="input-user" placeholder="neo4j" class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[var(--primary-color)]">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Password</label>
+                    <input type="password" id="input-password" placeholder="••••••" class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[var(--primary-color)]">
+                </div>
+                <div id="login-error" class="text-red-500 text-xs text-center hidden"></div>
+                <button type="submit" class="w-full py-3 bg-[var(--primary-color)] text-white rounded-lg hover:bg-red-700 font-medium transition-all">Connetti</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="container mx-auto px-6 py-5 flex items-center justify-between sticky inset-x-0 top-0 bg-white/95 backdrop-blur-sm z-50 border-b border-gray-100 shadow-sm">
+        <a href="index.html" class="flex items-center gap-3">
+            <svg class="h-8 w-auto text-black" viewBox="0 0 50 50" fill="currentColor">
+                <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
+                <path d="M22 15h6v20h-6z"/>
+            </svg>
+            <span class="font-semibold text-lg tracking-tight hidden sm:block">NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span></span>
+        </a>
+        <div class="flex items-center gap-6">
+            <div id="db-status-badge" class="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer" onclick="openLoginModal()">
+                <span id="db-indicator" class="status-dot status-offline"></span>
+                <span id="db-text" class="text-[10px] font-mono text-gray-500 font-bold uppercase">Not Connected</span>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium">
+                <a href="index.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Home</a>
+                <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+                <a href="#" class="text-[var(--primary-color)] font-bold">Timeline</a>
+                <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
+                <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-grow">
+        
+        <!-- BREADCRUMB & HEADER -->
+        <section class="bg-gray-50 border-b border-gray-200">
+            <div class="container mx-auto px-6 py-8">
+                <nav class="flex text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+                    <ol class="flex items-center">
+                        <li class="breadcrumb-item"><a href="dashboard.html" class="hover:text-black">Archivio</a></li>
+                        <li class="breadcrumb-item"><span id="entity-type-bread" class="skeleton w-16 h-4 inline-block"></span></li>
+                        <li class="breadcrumb-item active text-gray-900 font-medium" aria-current="page"><span id="entity-name-bread" class="skeleton w-32 h-4 inline-block"></span></li>
+                    </ol>
+                </nav>
+
+                <div class="flex flex-col md:flex-row gap-8 items-start">
+                    <!-- Image / Icon Placeholder -->
+                    <div class="w-32 h-32 md:w-40 md:h-40 bg-white border border-gray-200 rounded-lg shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                         <img id="entity-image" src="" class="w-full h-full object-cover hidden" alt="Entity Image">
+                         <i data-lucide="box" id="entity-icon" class="w-12 h-12 text-gray-300"></i>
+                    </div>
+
+                    <!-- Title & Meta -->
+                    <div class="flex-grow w-full">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span id="entity-type-badge" class="px-2 py-0.5 bg-gray-200 text-gray-600 text-[10px] font-bold uppercase rounded skeleton w-16 h-5"></span>
+                            <span id="entity-id-badge" class="text-xs font-mono text-gray-400">ID: <span id="entity-id-val">...</span></span>
+                        </div>
+                        <h1 class="serif text-4xl md:text-5xl text-gray-900 mb-4 leading-tight min-h-[3rem]"><span id="entity-title" class="skeleton w-3/4 h-10 block"></span></h1>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2 text-sm text-gray-600" id="header-meta">
+                            <!-- Popolato dinamicamente -->
+                            <div class="skeleton w-full h-4 mb-2"></div>
+                            <div class="skeleton w-2/3 h-4"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- DETAILS & RELATIONS -->
+        <section class="container mx-auto px-6 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                
+                <!-- LEFT COLUMN: Description & Attributes -->
+                <div class="lg:col-span-4 space-y-8">
+                    <div>
+                        <h3 class="font-bold text-gray-900 uppercase tracking-wider text-xs mb-4 border-b border-gray-100 pb-2">Informazioni</h3>
+                        <div id="attributes-list" class="space-y-3 text-sm">
+                            <div class="skeleton w-full h-20"></div>
+                        </div>
+                    </div>
+
+                    <div id="description-box" class="hidden">
+                        <h3 class="font-bold text-gray-900 uppercase tracking-wider text-xs mb-4 border-b border-gray-100 pb-2">Descrizione</h3>
+                        <p class="text-gray-600 leading-relaxed font-serif italic" id="entity-description"></p>
+                    </div>
+
+                    <div id="external-links" class="hidden pt-4">
+                        <a href="#" target="_blank" id="wikidata-link" class="inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-black border border-gray-200 px-3 py-2 rounded hover:bg-gray-50 transition-colors w-full justify-center">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/f/ff/Wikidata-logo.svg" class="w-4 h-4">
+                            Vedi su Wikidata
+                        </a>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Related Entities (The Graph) -->
+                <div class="lg:col-span-8">
+                    <h2 class="typog-header2 mb-8">Relazioni e Attività</h2>
+                    
+                    <div id="relations-container" class="space-y-10">
+                        <div class="text-center py-20">
+                            <i data-lucide="loader" class="w-8 h-8 animate-spin text-gray-300 mx-auto mb-3"></i>
+                            <p class="text-gray-400 text-sm">Caricamento connessioni dal grafo...</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-900 text-white py-12 mt-auto border-t border-gray-800">
+        <div class="container mx-auto px-6 text-center">
+            <p class="text-gray-500 text-sm">&copy; 2024 Knowledge Graph Teatro Regio. Powered by Neo4j.</p>
+        </div>
+    </footer>
+
+    <!-- LOGIC -->
+    <script>
+        lucide.createIcons();
+        let driver;
+        const NEO4J_URI = 'bolt://archiuidev.promemoriagroup.com:7687';
+
+        // 1. Get parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const entityId = urlParams.get('id'); // Questo è il CODE del nodo ID o l'ID interno Neo4j
+        const entityQid = urlParams.get('qid'); // Wikidata QID
+        const entityName = urlParams.get('name'); // Nome (fallback)
+        const entityType = urlParams.get('type'); // Tipo specifico
+        const entityTitle = urlParams.get('title'); // Titolo per opere
+
+        let entityNode = null; // Memorizza il nodo trovato
+
+        // Mappatura relazioni inglese -> italiano con logica di visualizzazione
+        const relationTranslations = {
+            // Relazioni per opere
+            'HAS_COMPOSER': { it: 'Compositore', out: 'ha compositore', in: 'è compositore di' },
+            'HAS_LIBRETTIST': { it: 'Librettista', out: 'ha librettista', in: 'è librettista di' },
+            'HAS_LITERARY_AUTHOR': { it: 'Autore letterario', out: 'ha autore letterario', in: 'è autore letterario di' },
+            'IS_COMPOSER': { it: 'Compositore', out: 'è compositore di', in: 'ha compositore' },
+            'IS_LIBRETTIST': { it: 'Librettista', out: 'è librettista di', in: 'ha librettista' },
+            'IS_LITERARY_AUTHOR': { it: 'Autore letterario', out: 'è autore letterario di', in: 'ha autore letterario' },
+            'HAS_CHARACTER': { it: 'Personaggio', out: 'ha personaggio', in: 'personaggio di' },
+            'RELATED_TO_WORK': { it: 'Opera correlata', out: 'correlato a opera', in: 'opera correlata a' },
+            
+            // Relazioni per produzioni
+            'DIRECTED': { it: 'Regia', out: 'ha regista', in: 'regista di' },
+            'DESIGNED_SET': { it: 'Scenografia', out: 'ha scenografo', in: 'scenografo di' },
+            'CHOREOGRAPHED': { it: 'Coreografia', out: 'ha coreografo', in: 'coreografo di' },
+            'DESIGNED_COSTUMES': { it: 'Costumi', out: 'ha costumista', in: 'costumista di' },
+            'CONDUCTED': { it: 'Direzione', out: 'ha direttore', in: 'direttore di' },
+            'HAD_ROLE_IN': { it: 'Ruolo', out: 'ha ruolo in', in: 'con ruolo in' },
+            
+            // Relazioni per performance
+            'PERFORMED_IN': { it: 'Interpretazione', out: 'ha interprete', in: 'interprete in' },
+            'INTERPRETED': { it: 'Interpreta personaggio', out: 'interpreta personaggio', in: 'interpretato da' },
+            'APPEARED_IN': { it: 'Appare in', out: 'appare in', in: 'presenta personaggio' },
+            'PARTICIPATED_IN': { it: 'Partecipazione', out: 'ha partecipante', in: 'partecipa a' },
+            
+            // Relazioni organizzative
+            'INCLUDES_PRODUCTION': { it: 'Include produzione', out: 'include produzione', in: 'parte di stagione' },
+            'INCLUDES_PERFORMANCE': { it: 'Include recita', out: 'include recita', in: 'recita in stagione' },
+            'IS_PART_OF': { it: 'Parte di', out: 'parte di', in: 'include' },
+            'HAS_PERFORMANCE': { it: 'Ha recita', out: 'ha recita', in: 'recita di produzione' },
+            'ORGANIZED_BY': { it: 'Organizzato da', out: 'organizzato da', in: 'organizza' },
+            'RELATES_TO': { it: 'Relativo a', out: 'relativo a', in: 'riferimento di' },
+            'HELD_IN': { it: 'Svolto in', out: 'svolto in', in: 'sede di' }
+        };
+
+        // Relazioni da escludere (ridondanti o tecniche)
+        const excludedRelations = ['RELATES_TO', 'IS_ID_OF'];
+
+        window.addEventListener('load', () => {
+            const u = sessionStorage.getItem('neo4j_user');
+            const p = sessionStorage.getItem('neo4j_pass');
+            
+            if (u && p) {
+                connectToDB(u, p);
+            } else {
+                document.getElementById('login-modal').classList.add('open');
+            }
+        });
+
+        // Login Handler
+        document.getElementById('db-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const u = document.getElementById('input-user').value;
+            const p = document.getElementById('input-password').value;
+            connectToDB(u, p);
+        });
+
+        async function connectToDB(user, pass) {
+            try {
+                driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(user, pass));
+                await driver.verifyConnectivity();
+                
+                sessionStorage.setItem('neo4j_user', user);
+                sessionStorage.setItem('neo4j_pass', pass);
+                document.getElementById('login-modal').classList.remove('open');
+
+                // Cerca l'entità in base ai parametri disponibili
+                await findEntity();
+                
+                if(entityNode) {
+                    await loadEntityData(entityNode);
+                } else {
+                    // Rimuovi skeleton quando l'entità non è trovata
+                    removeAllSkeletons();
+                    document.getElementById('relations-container').innerHTML = `
+                        <div class="p-10 text-center text-red-500 bg-red-50 rounded">
+                            <i data-lucide="alert-circle" class="w-8 h-8 mx-auto mb-3"></i>
+                            <p>Entità non trovata. Parametri disponibili:</p>
+                            <p class="text-xs text-gray-500 mt-2">
+                                ID: ${entityId || 'none'}<br>
+                                QID: ${entityQid || 'none'}<br>
+                                Name: ${entityName || 'none'}
+                            </p>
+                        </div>`;
+                }
+
+            } catch (err) {
+                console.error(err);
+                // Rimuovi skeleton in caso di errore di connessione
+                removeAllSkeletons();
+                document.getElementById('login-error').textContent = "Errore: " + err.message;
+                document.getElementById('login-error').classList.remove('hidden');
+                document.getElementById('login-modal').classList.add('open');
+            }
+        }
+
+        async function findEntity() {
+            const session = driver.session();
+            try {
+                // Cerca prima per ID (nodo ID) - questo è il caso normale per i link
+                if (entityId && (entityId.startsWith('regio_') || entityId.startsWith('fondazione_'))) {
+                    console.log("Cerca per ID code:", entityId);
+                    const result = await session.run(`
+                        MATCH (idNode:ID {code: $code})-[:IS_ID_OF]->(n)
+                        RETURN n
+                    `, { code: entityId });
+                    
+                    if (result.records.length > 0) {
+                        entityNode = result.records[0].get('n');
+                        return;
+                    }
+                }
+                
+                // Se l'ID è un numero, potrebbe essere un ID interno di Neo4j (fallback)
+                if (entityId && !isNaN(entityId)) {
+                    console.log("Cerca per ID interno Neo4j:", entityId);
+                    const result = await session.run(`
+                        MATCH (n) 
+                        WHERE id(n) = $id
+                        RETURN n
+                        LIMIT 1
+                    `, { id: neo4j.int(parseInt(entityId)) });
+                    
+                    if (result.records.length > 0) {
+                        entityNode = result.records[0].get('n');
+                        return;
+                    }
+                }
+
+                // Se non trovato, cerca per Wikidata QID
+                if (entityQid) {
+                    console.log("Cerca per Wikidata QID:", entityQid);
+                    const result = await session.run(`
+                        MATCH (n) 
+                        WHERE n.wikidata_qid = $qid
+                        RETURN n
+                        LIMIT 1
+                    `, { qid: entityQid });
+                    
+                    if (result.records.length > 0) {
+                        entityNode = result.records[0].get('n');
+                        return;
+                    }
+                }
+
+                // Se non trovato, cerca per nome/tipo
+                if (entityName) {
+                    console.log("Cerca per nome:", entityName);
+                    let query = `MATCH (n) WHERE n.name = $name`;
+                    const params = { name: entityName };
+                    
+                    if (entityType) {
+                        query += ` AND n:${entityType.charAt(0).toUpperCase() + entityType.slice(1)}`;
+                    }
+                    
+                    query += ` RETURN n LIMIT 1`;
+                    
+                    const result = await session.run(query, params);
+                    
+                    if (result.records.length > 0) {
+                        entityNode = result.records[0].get('n');
+                        return;
+                    }
+                }
+
+                // Ultimo tentativo: cerca per titolo (per opere)
+                if (entityTitle) {
+                    console.log("Cerca per titolo:", entityTitle);
+                    const result = await session.run(`
+                        MATCH (n:Work) 
+                        WHERE n.title = $title
+                        RETURN n
+                        LIMIT 1
+                    `, { title: entityTitle });
+                    
+                    if (result.records.length > 0) {
+                        entityNode = result.records[0].get('n');
+                        return;
+                    }
+                }
+
+            } catch (e) {
+                console.error("Find Entity Error:", e);
+            } finally {
+                await session.close();
+            }
+        }
+
+        async function loadEntityData(node) {
+            const session = driver.session();
+            try {
+                const nodeId = node.identity.low;
+                const props = node.properties;
+                const labels = node.labels;
+                const type = labels[0] || 'Entity';
+                const name = props.name || props.title || props.full_name || props.label || `Nodo #${nodeId}`;
+
+                // Query MIGLIORATA: Ottiene anche i codici ID delle entità correlate
+                const result = await session.run(`
+                    MATCH (n) WHERE id(n) = $id
+                    // Ottieni il codice ID associato al nodo principale
+                    OPTIONAL MATCH (mainId:ID)-[:IS_ID_OF]->(n)
+                    // Ottieni tutte le relazioni e i codici ID delle entità correlate
+                    OPTIONAL MATCH (n)-[r]-(m)
+                    WHERE m IS NOT NULL 
+                      AND NOT m:ID
+                      AND NOT type(r) IN $excludedRelations
+                    // Ottieni il codice ID di ogni entità correlata
+                    OPTIONAL MATCH (targetId:ID)-[:IS_ID_OF]->(m)
+                    RETURN n, 
+                           mainId.code as idCode,
+                           collect({
+                                relType: type(r), 
+                                node: m, 
+                                targetIdCode: targetId.code,
+                                props: properties(m),
+                                relProps: properties(r),
+                                direction: CASE WHEN startNode(r) = n THEN 'OUT' ELSE 'IN' END
+                           }) as connections
+                `, { 
+                    id: neo4j.int(nodeId),
+                    excludedRelations: excludedRelations
+                });
+
+                if (result.records.length === 0) {
+                    alert("Errore nel caricamento delle relazioni!");
+                    return;
+                }
+
+                const rec = result.records[0];
+                const idCode = rec.get('idCode');
+                const connections = rec.get('connections');
+
+                // FILTRA DUPLICATI - IMPORTANTE!
+                const uniqueConnections = [];
+                const seenCombinations = new Set();
+
+                connections.forEach(c => {
+                    if(!c || !c.node) return;
+                    
+                    const targetId = c.node.identity ? c.node.identity.low : null;
+                    const relType = c.relType;
+                    
+                    if (!targetId || !relType) return;
+                    
+                    // Crea una chiave unica: nodo_target + tipo_relazione + direzione
+                    const combo = `${targetId}_${relType}_${c.direction}`;
+                    
+                    if (!seenCombinations.has(combo)) {
+                        seenCombinations.add(combo);
+                        uniqueConnections.push(c);
+                    } else {
+                        console.log("Rimosso duplicato:", combo, c.props?.name || c.props?.title);
+                    }
+                });
+
+                console.log(`Connessioni totali: ${connections.length}, Uniche: ${uniqueConnections.length}`);
+
+                // 2. Populate Header
+                document.title = `${name} - Archivio Teatro Regio`;
+                
+                // Rimuovi skeleton dall'elemento title
+                const titleElement = document.getElementById('entity-title');
+                titleElement.textContent = name;
+                titleElement.classList.remove('skeleton');
+                titleElement.classList.add('loaded');
+                
+                // Rimuovi skeleton dal badge
+                const typeBadge = document.getElementById('entity-type-badge');
+                typeBadge.textContent = type;
+                typeBadge.classList.remove('skeleton');
+                typeBadge.classList.add('loaded');
+                typeBadge.style.backgroundColor = getColorForLabel(type);
+                typeBadge.style.color = 'white';
+
+                // Mostra il codice ID corretto
+                document.getElementById('entity-id-val').textContent = idCode || entityId || nodeId;
+                
+                // Breadcrumbs - correggi il plurale
+                let breadcrumbType = type;
+                if (type === 'Person') breadcrumbType = 'People';
+                else if (type === 'Work') breadcrumbType = 'Works';
+                else if (type === 'Production') breadcrumbType = 'Productions';
+                else if (type === 'Performance') breadcrumbType = 'Performances';
+                else if (type === 'Season') breadcrumbType = 'Seasons';
+                else breadcrumbType = type + 's';
+                
+                // Rimuovi skeleton dai breadcrumb
+                const typeBreadElement = document.getElementById('entity-type-bread');
+                typeBreadElement.textContent = breadcrumbType;
+                typeBreadElement.classList.remove('skeleton');
+                typeBreadElement.classList.add('loaded');
+                
+                const nameBreadElement = document.getElementById('entity-name-bread');
+                nameBreadElement.textContent = name;
+                nameBreadElement.classList.remove('skeleton');
+                nameBreadElement.classList.add('loaded');
+
+                // Image Logic
+                let iconName = 'box';
+                let imgSrc = null;
+
+                if(type === 'Person') {
+                    iconName = 'user';
+                    imgSrc = "https://images.unsplash.com/photo-1522075469751-3a3694c60e9e?auto=format&fit=crop&w=300&q=60"; 
+                } else if (type === 'Production' || type === 'Work') {
+                    iconName = 'music';
+                    if ((name.toLowerCase().includes('traviata'))) imgSrc = "https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?auto=format&fit=crop&w=300&q=60";
+                    else imgSrc = "https://images.unsplash.com/photo-1507676184212-d0370baf55de?auto=format&fit=crop&w=300&q=60";
+                } else if (type === 'Season') {
+                    iconName = 'calendar';
+                } else if (type === 'Character') {
+                    iconName = 'user-circle';
+                }
+
+                if (imgSrc) {
+                    const imgEl = document.getElementById('entity-image');
+                    imgEl.src = imgSrc;
+                    imgEl.classList.remove('hidden');
+                    document.getElementById('entity-icon').classList.add('hidden');
+                } else {
+                    // Aggiorna icona
+                    const iconEl = document.getElementById('entity-icon');
+                    iconEl.setAttribute('data-lucide', iconName);
+                    lucide.createIcons();
+                }
+
+                // Rimuovi skeleton dal header-meta
+                const headerMeta = document.getElementById('header-meta');
+                headerMeta.classList.remove('skeleton');
+                headerMeta.classList.add('loaded');
+                headerMeta.innerHTML = ''; // Ora puoi popolarlo con i dati reali
+                
+                // Popola header-meta con dati reali
+                if (props.birth_date || props.death_date) {
+                    const lifeSpanDiv = document.createElement('div');
+                    const birth = props.birth_date ? new Date(props.birth_date).getFullYear() : '';
+                    const death = props.death_date ? new Date(props.death_date).getFullYear() : '';
+                    lifeSpanDiv.innerHTML = `
+                        <span class="text-xs font-bold text-gray-400 uppercase">Vita</span>
+                        <div class="text-gray-800">${birth}${death ? ` – ${death}` : ''}</div>
+                    `;
+                    headerMeta.appendChild(lifeSpanDiv);
+                }
+                
+                if (props.genre || props.type) {
+                    const genreDiv = document.createElement('div');
+                    genreDiv.innerHTML = `
+                        <span class="text-xs font-bold text-gray-400 uppercase">Genere/Tipo</span>
+                        <div class="text-gray-800">${props.genre || props.type}</div>
+                    `;
+                    headerMeta.appendChild(genreDiv);
+                }
+
+                // 3. Populate Left Column (Attributes)
+                const attrList = document.getElementById('attributes-list');
+                attrList.innerHTML = ''; // clear skeleton
+                attrList.classList.remove('skeleton');
+                attrList.classList.add('loaded');
+
+                // Filter out system props
+                const ignoreProps = ['embedding', 'vector'];
+                
+                Object.entries(props).forEach(([key, val]) => {
+                    if (ignoreProps.includes(key) || 
+                        (Array.isArray(val) && val.length > 5 && typeof val[0] === 'number') ||
+                        val === null || 
+                        val === '') return;
+                    
+                    if (key === 'dcDescription' || key === 'description') return; // Handled separately
+                    if (key === 'wikidata_uri') return; // Handled separately
+                    if (key === 'birth_date' || key === 'death_date' || key === 'genre' || key === 'type') return; // Already in header
+
+                    const label = key.replace(/_/g, ' ')
+                                     .replace(/([A-Z])/g, ' $1')
+                                     .trim()
+                                     .replace(/^./, str => str.toUpperCase()); // camelCase to Normal Text
+                    
+                    let displayValue = val;
+                    if (typeof val === 'string' && val.includes('http')) {
+                        displayValue = `<a href="${val}" target="_blank" class="text-blue-500 hover:underline truncate block">${val}</a>`;
+                    } else if (Array.isArray(val)) {
+                        displayValue = val.join(', ');
+                    } else if (typeof val === 'boolean') {
+                        displayValue = val ? 'Sì' : 'No';
+                    }
+                    
+                    const div = document.createElement('div');
+                    div.className = "flex flex-col border-b border-gray-100 last:border-0 pb-2 mb-2";
+                    div.innerHTML = `
+                        <span class="text-xs font-bold text-gray-400 uppercase truncate">${label}</span>
+                        <span class="text-gray-800 break-words">${displayValue}</span>
+                    `;
+                    attrList.appendChild(div);
+                });
+
+                if (props.dcDescription || props.description) {
+                    document.getElementById('description-box').classList.remove('hidden');
+                    document.getElementById('entity-description').textContent = props.dcDescription || props.description;
+                }
+
+                if (props.wikidata_uri || props.wikidata_qid) {
+                    document.getElementById('external-links').classList.remove('hidden');
+                    const uri = props.wikidata_uri || `https://www.wikidata.org/wiki/${props.wikidata_qid}`;
+                    document.getElementById('wikidata-link').href = uri;
+                    document.getElementById('wikidata-link').innerHTML = `
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/f/ff/Wikidata-logo.svg" class="w-4 h-4">
+                        Vedi su Wikidata ${props.wikidata_qid ? `(${props.wikidata_qid})` : ''}
+                    `;
+                }
+
+                // 4. Populate Right Column (Relations) - usa uniqueConnections invece di connections
+                const relContainer = document.getElementById('relations-container');
+                relContainer.innerHTML = ''; // clear loader
+
+                if (!uniqueConnections || uniqueConnections.length === 0) {
+                    relContainer.innerHTML = `<div class="p-10 text-center bg-gray-50 rounded-lg text-gray-500">
+                        <i data-lucide="unlink" class="w-8 h-8 mx-auto mb-3 text-gray-300"></i>
+                        <p>Nessuna relazione trovata per questo nodo.</p>
+                    </div>`;
+                    return;
+                }
+
+                // Group by Relation Type
+                const groups = {};
+                uniqueConnections.forEach(c => {
+                    if(!c || !c.node) return;
+                    const relType = c.relType;
+                    
+                    // Escludi relazioni vuote o nella lista esclusa
+                    if (!relType || excludedRelations.includes(relType)) return;
+                    
+                    // Ottieni traduzione o usa originale
+                    const translation = relationTranslations[relType] || { it: relType.replace(/_/g, ' '), out: relType.toLowerCase().replace(/_/g, ' '), in: relType.toLowerCase().replace(/_/g, ' ') };
+                    
+                    const relName = translation.it;
+                    
+                    if (!groups[relName]) groups[relName] = { items: [], translation: translation };
+                    // Add ID to node object for linking
+                    c.node.id = c.node.identity ? c.node.identity.low : null;
+                    if (!c.node.id) return;
+                    
+                    groups[relName].items.push(c);
+                });
+
+                // Render Groups
+                    for (const [relName, groupData] of Object.entries(groups)) {
+                        const items = groupData.items;
+                        const translation = groupData.translation;
+                        
+                        if (!items || items.length === 0) continue;
+                        
+                        // Sort items (safe handling of undefined properties)
+                        items.sort((a,b) => {
+                            try {
+                                const propsA = a.props || {};
+                                const propsB = b.props || {};
+                                const valA = propsA.date || propsA.name || propsA.title || propsA.full_name || "";
+                                const valB = propsB.date || propsB.name || propsB.title || propsB.full_name || "";
+                                return (valB || "").localeCompare(valA || ""); // Newest/Alpha desc
+                            } catch (e) {
+                                return 0;
+                            }
+                        });
+
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = "mb-8";
+                        
+                        const groupTitle = document.createElement('h3');
+                        groupTitle.className = "font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4 flex items-center gap-2";
+                        
+                        // Versione pulita: solo nome relazione e conteggio
+                        groupTitle.innerHTML = `
+                            <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs uppercase tracking-wider">${relName}</span>
+                            <span class="text-xs text-gray-400 font-normal">(${items.length})</span>
+                        `;
+                        groupDiv.appendChild(groupTitle);
+
+                        const grid = document.createElement('div');
+                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
+
+                        items.forEach(item => {
+                        if (!item || !item.node) return;
+                        
+                        const target = item.node;
+                        const tProps = item.props || {};
+                        const tName = tProps.name || tProps.title || tProps.full_name || tProps.label || "Entità senza nome";
+                        const tType = target.labels ? target.labels[0] : 'Entity';
+                        const tIdCode = item.targetIdCode; // Questo è il codice ID!
+                        
+                        if (!tIdCode) {
+                            console.warn("Nessun codice ID trovato per l'entità:", tName);
+                            return; // Salta se non c'è codice ID
+                        }
+                        
+                        // Extra info based on type (with safe property access)
+                        let extraInfo = "";
+                        try {
+                            if (tProps.date && typeof tProps.date === 'string') {
+                                const datePart = tProps.date.split('T')[0];
+                                extraInfo = `<span class="text-xs font-mono text-gray-400">
+                                    <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i>${datePart}
+                                </span>`;
+                            } else if (tProps.birth_date && typeof tProps.birth_date === 'string') {
+                                const datePart = tProps.birth_date.split('T')[0];
+                                extraInfo = `<span class="text-xs font-mono text-gray-400">
+                                    <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i>${datePart}
+                                </span>`;
+                            } else if (tType === 'Work' && tProps.composer) {
+                                extraInfo = `<span class="text-xs text-gray-500 italic">${tProps.composer}</span>`;
+                            } else if (tProps.source) {
+                                extraInfo = `<span class="text-xs text-gray-500">${tProps.source}</span>`;
+                            } else if (item.relProps && item.relProps.role) {
+                                extraInfo = `<span class="text-xs text-gray-500">${item.relProps.role}</span>`;
+                            }
+                        } catch (e) {
+                            console.warn("Error processing extra info:", e);
+                        }
+
+                        const card = document.createElement('a');
+                        // Crea link usando il codice ID
+                        card.href = `entity.html?id=${tIdCode}`;
+                        card.className = "flex items-start gap-4 p-4 rounded-lg border border-gray-100 bg-white hover:border-[var(--primary-color)] hover:shadow-md transition-all group";
+                        
+                        card.innerHTML = `
+                            <div class="w-10 h-10 rounded bg-gray-50 flex items-center justify-center text-gray-400 flex-shrink-0 group-hover:bg-red-50 group-hover:text-[var(--primary-color)] transition-colors">
+                                <i data-lucide="${getIconForType(tType)}" class="w-5 h-5"></i>
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <h4 class="font-medium text-gray-900 truncate group-hover:text-[var(--primary-color)] transition-colors">${tName}</h4>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[10px] font-bold uppercase text-gray-400 border border-gray-100 px-1.5 rounded">${tType}</span>
+                                    ${extraInfo}
+                                </div>
+                            </div>
+                            <div class="self-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+
+                    if (grid.children.length > 0) {
+                        groupDiv.appendChild(grid);
+                        relContainer.appendChild(groupDiv);
+                    }
+                }
+
+                // Se non ci sono gruppi, mostra messaggio
+                if (relContainer.children.length === 0) {
+                    relContainer.innerHTML = `<div class="p-10 text-center bg-gray-50 rounded-lg text-gray-500">
+                        <i data-lucide="unlink" class="w-8 h-8 mx-auto mb-3 text-gray-300"></i>
+                        <p>Nessuna relazione trovata per questo nodo.</p>
+                    </div>`;
+                }
+
+                lucide.createIcons();
+
+            } catch (e) {
+                console.error("Entity Load Error", e);
+                // Rimuovi skeleton in caso di errore
+                removeAllSkeletons();
+                document.getElementById('relations-container').innerHTML = `
+                    <div class="p-8 text-center text-red-500 bg-red-50 rounded">
+                        <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-3"></i>
+                        <p>Errore nel caricamento dati:</p>
+                        <p class="text-xs text-gray-600 mt-2 font-mono">${e.message || 'Errore sconosciuto'}</p>
+                    </div>`;
+            } finally {
+                await session.close();
+            }
+        }
+
+        // --- UTILS ---
+        function getColorForLabel(label) {
+            const colors = { 
+                'Person': '#cf171c', 
+                'Production': '#d97706', 
+                'Work': '#4a3b5c', 
+                'Performance': '#10b981', 
+                'Character': '#3b82f6', 
+                'Season': '#8b5cf6',
+                'Place': '#6b7280',
+                'Building': '#0e7490',
+                'Organizer': '#7c3aed',
+                'Persona': '#cf171c'
+            };
+            return colors[label] || '#9ca3af';
+        }
+
+        function getIconForType(type) {
+            const map = {
+                'Person': 'user',
+                'Persona': 'user',
+                'Production': 'layers',
+                'Work': 'music',
+                'Performance': 'calendar',
+                'Season': 'clock',
+                'Place': 'map-pin',
+                'Character': 'user-circle',
+                'Building': 'building',
+                'Organizer': 'users',
+                'Ensemble': 'users'
+            };
+            return map[type] || 'box';
+        }
+
+        // Funzione per gestire i plurali in italiano
+        function getItalianPlural(word, count) {
+            if (count === 1) return word;
+            
+            // Regole semplici per i plurali
+            if (word.endsWith('a')) {
+                return word.slice(0, -1) + 'e';
+            } else if (word.endsWith('o')) {
+                return word.slice(0, -1) + 'i';
+            } else if (word.endsWith('e')) {
+                return word.slice(0, -1) + 'i';
+            } else if (word.endsWith('tà') || word.endsWith('tà')) {
+                return word;
+            }
+            return word;
+        }
+
+        // Funzione per rimuovere tutti gli skeleton
+        function removeAllSkeletons() {
+            const skeletons = document.querySelectorAll('.skeleton');
+            skeletons.forEach(skeleton => {
+                skeleton.classList.remove('skeleton');
+                skeleton.classList.add('loaded');
+            });
+        }
+
+        // Funzione per aprire il modal di login
+        function openLoginModal() {
+            document.getElementById('login-modal').classList.add('open');
+        }
+
+    </script>
+</body>
+</html>

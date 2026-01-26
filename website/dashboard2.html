@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizzazioni - Knowledge Graph Teatro Regio</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Neo4j Javascript Driver -->
+    <script src="https://unpkg.com/neo4j-driver"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Font e Icone -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --primary-color: #cf171c;
+            --secondary-color: #1a171a;
+            --code-bg: #1e1e1e;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--secondary-color);
+            background-color: #f8f9fa;
+        }
+
+        .typog-hero {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem;
+            line-height: 1.1;
+            font-weight: 600;
+        }
+
+        .typog-header2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            line-height: 1.2;
+            font-weight: 500;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.open {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-online { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .status-offline { background-color: #ef4444; }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+            border-radius: 8px;
+            margin: 4px;
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .regio-card {
+            transition: all 0.3s ease;
+        }
+        .regio-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+   <!-- LOGIN MODAL -->
+   <div id="login-modal" class="modal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 border border-gray-100 mx-4">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+                    <i data-lucide="database" class="w-8 h-8 text-[var(--primary-color)]"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Connessione Neo4j</h2>
+                <p class="text-sm text-gray-500 mt-2">Inserisci le credenziali del database</p>
+            </div>
+            <form id="db-login-form" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">URI Database</label>
+                    <input type="text" id="input-uri" value="bolt://archiuidev.promemoriagroup.com:7687" class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-sm font-mono text-gray-600 focus:outline-none focus:border-[var(--primary-color)]" readonly>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Utente</label>
+                        <input type="text" id="input-user" placeholder="neo4j" class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[var(--primary-color)] transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Password</label>
+                        <input type="password" id="input-password" placeholder="••••••" class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[var(--primary-color)] transition-colors">
+                    </div>
+                </div>
+                <div id="login-error" class="text-red-500 text-xs text-center hidden bg-red-50 p-2 rounded"></div>
+                <button type="submit" class="w-full py-3 bg-[var(--primary-color)] text-white rounded-lg hover:bg-red-700 font-medium shadow-lg shadow-red-500/20 transition-all">
+                    Connetti al Grafo
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="container mx-auto px-6 py-5 flex items-center justify-between sticky inset-x-0 top-0 bg-white/95 backdrop-blur-sm z-50 border-b border-gray-100 shadow-sm">
+        <a href="index.html" class="flex items-center gap-3">
+            <svg class="h-8 w-auto text-[var(--primary-color)]" viewBox="0 0 50 50" fill="currentColor">
+                <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
+                <path d="M22 15h6v20h-6z"/>
+            </svg>
+            <span class="font-semibold text-lg tracking-tight hidden sm:block">NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span></span>
+        </a>
+        <div class="flex items-center gap-6">
+            <div id="db-status-badge" class="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer" onclick="openLoginModal()">
+                <span id="db-indicator" class="status-dot status-offline"></span>
+                <span id="db-text" class="text-[10px] font-mono text-gray-500 font-bold uppercase">Not Connected</span>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium">
+                <a href="index.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Home</a>
+                <a href="#" class="text-[var(--primary-color)] font-bold">Visualizations</a>
+                <a href="timeline.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Timeline</a>
+                <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
+                <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pb-24">
+
+        <!-- HERO -->
+        <section class="bg-[#1a171a] text-white py-20 relative overflow-hidden">
+            <div class="container mx-auto px-6 relative z-10">
+                <div class="max-w-3xl">
+                    <div class="inline-block px-3 py-1 mb-4 border border-red-500/50 rounded-full bg-red-500/10 text-red-400 text-xs font-mono tracking-wide uppercase">
+                        Neo4j • Cultural KG prototype
+                    </div>
+                    <h1 class="typog-hero mb-6">Chi & Cosa</h1>
+                    <p class="text-gray-400 text-lg leading-relaxed max-w-2xl">
+                        Un’esplorazione di persone, ruoli, compositori e opere basata sugli archivi del Teatro Regio e della Fondazione I Teatri, generata dinamicamente dal Knowledge Graph NeoTheatre.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- STATISTICHE GENERALI -->
+        <section class="container mx-auto px-6 -mt-10 relative z-20">
+            <div class="bg-white rounded-xl shadow-xl border border-gray-200 p-8 mb-12">
+                <h2 class="typog-header2 mb-8">Panoramica del Database</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3 mb-4 text-gray-500">
+                            <i data-lucide="users" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Persone</span>
+                        </div>
+                        <div class="text-4xl font-bold text-[var(--primary-color)] font-mono" id="stat-people">--</div>
+                    </div>
+                    <div class="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3 mb-4 text-gray-500">
+                            <i data-lucide="music" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Opere</span>
+                        </div>
+                        <div class="text-4xl font-bold text-[var(--primary-color)] font-mono" id="stat-works">--</div>
+                    </div>
+                    <div class="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3 mb-4 text-gray-500">
+                            <i data-lucide="layers" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Produzioni</span>
+                        </div>
+                        <div class="text-4xl font-bold text-[var(--primary-color)] font-mono" id="stat-productions">--</div>
+                    </div>
+                    <div class="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3 mb-4 text-gray-500">
+                            <i data-lucide="calendar" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">Recite</span>
+                        </div>
+                        <div class="text-4xl font-bold text-[var(--primary-color)] font-mono" id="stat-performances">--</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CHI: ARTISTI E RUOLI -->
+        <!-- CHI: ARTISTI E RUOLI -->
+<section class="container mx-auto px-6 py-12">
+    <h2 class="typog-header2 mb-12">Chi: Artisti e Ruoli</h2>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <!-- Colonna sinistra: Artisti più Ricorrenti (piena altezza) -->
+        <div class="space-y-12">
+            <!-- Artisti più Ricorrenti -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+                        <i data-lucide="star" class="w-5 h-5 text-yellow-500"></i>
+                        Artisti più Ricorrenti
+                    </h3>
+                    <span class="text-xs text-gray-500 font-mono uppercase">TOP 10</span>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="topArtistsChart"></canvas>
+                </div>
+                
+                <div id="artists-list" class="mt-6 space-y-4">
+                    <div class="text-center text-gray-400 py-8">
+                        <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                        <p>Connettiti al database per vedere gli artisti</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Colonna destra: Ruoli + Insight -->
+        <div class="space-y-12">
+            <!-- Ruoli più Frequenti -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+                        <i data-lucide="user-check" class="w-5 h-5 text-blue-500"></i>
+                        Ruoli più Frequenti
+                    </h3>
+                    <span class="text-xs text-gray-500 font-mono uppercase">TOP 15</span>
+                </div>
+                
+                <div id="roles-cloud" class="min-h-[140px] flex flex-wrap items-center justify-center">
+                    <div class="text-center text-gray-400 py-8">
+                        <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                        <p>Connettiti al database per vedere i ruoli</p>
+                    </div>
+                </div>
+                
+                <div id="roles-list" class="mt-3 space-y-2">
+                    <!-- Dettaglio ruoli verrà popolato qui -->
+                </div>
+            </div>
+
+            <!-- Insight: Ruolo "ponte" tra più opere -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center gap-2">
+    <i data-lucide="link-2" class="w-5 h-5 text-[var(--primary-color)]"></i>
+    Il Personaggio Trasversale
+</h3>
+<span class="text-xs text-gray-500 font-mono uppercase">1ST</span>
+                </div>
+
+                <div id="bridge-role-loading" class="text-center text-gray-400 py-8">
+                    <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                    <p>Calcolo ruolo…</p>
+                </div>
+
+                <div id="bridge-role-content" class="hidden">
+                    <div class="bg-gray-50 border border-gray-100 rounded-xl p-5">
+                        <div class="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                            Personaggio presente in più opere
+                        </div>
+
+                        <div class="text-2xl font-bold text-[var(--primary-color)] leading-tight" id="bridge-role-name">--</div>
+
+                        <div class="mt-3 flex flex-wrap gap-2 text-sm text-gray-600">
+                            <span class="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1">
+                                <i data-lucide="music" class="w-4 h-4 text-gray-500"></i>
+                                <span><b id="bridge-role-works">--</b> opere</span>
+                            </span>
+                            <span class="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1">
+                                <i data-lucide="users" class="w-4 h-4 text-gray-500"></i>
+                                <span><b id="bridge-role-people">--</b> interpreti</span>
+                            </span>
+                        </div>
+
+                        <a id="bridge-role-link"
+                           href="#"
+                           class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--primary-color)] hover:underline">
+                            Vai alla scheda del personaggio
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+
+                    <div class="mt-4 text-xs text-gray-500 leading-relaxed">
+                        Misura la "portabilità" di un ruolo: quante opere diverse lo includono (e quanti interpreti diversi lo hanno interpretato).
+                    </div>
+                </div>
+
+                <div id="bridge-role-empty" class="hidden bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-800">
+                    Non trovo un collegamento <b>Character → Work</b> nel grafo (o non è popolato).
+                    Se mi dici come si chiama la relazione, lo rendo preciso.
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+        <!-- COSA: COMPOSITORI E OPERE -->
+        <section class="container mx-auto px-6 py-12 bg-gray-50 rounded-2xl mb-12">
+            <h2 class="typog-header2 mb-12">Cosa: Compositori e Opere</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <!-- Compositori più Rappresentati -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold flex items-center gap-2">
+                            <i data-lucide="music-2" class="w-5 h-5 text-purple-500"></i>
+                            Compositori più Rappresentati
+                        </h3>
+                        <span class="text-xs text-gray-500 font-mono uppercase">TOP 8</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="topComposersChart"></canvas>
+                    </div>
+                    
+                    <div id="composers-list" class="mt-6 space-y-4">
+                        <div class="text-center text-gray-400 py-8">
+                            <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                            <p>Connettiti al database per vedere i compositori</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opere più Rappresentate -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold flex items-center gap-2">
+                            <i data-lucide="trophy" class="w-5 h-5 text-red-500"></i>
+                            Opere più Rappresentate
+                        </h3>
+                        <span class="text-xs text-gray-500 font-mono uppercase">TOP 10</span>
+                    </div>
+                    
+                    <div id="works-list" class="space-y-4">
+                        <div class="text-center text-gray-400 py-8">
+                            <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                            <p>Connettiti al database per vedere le opere</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INSIGHTS DAL GRAFO -->
+<section class="container mx-auto px-6 pt-0 pb-12">  <!-- Modifica qui: pt-0 invece di py-12 -->
+    <div class="bg-gradient-to-r from-[var(--primary-color)]/10 to-blue-100 border border-[var(--primary-color)]/20 rounded-2xl p-8">
+        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+            <i data-lucide="lightbulb" class="w-5 h-5 text-yellow-600"></i>
+            Insights dal Grafo
+        </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white/80 p-4 rounded-lg border border-gray-200">
+                        <div class="text-sm text-gray-600 mb-2">Opera più rappresentata</div>
+                        <div class="text-2xl font-bold text-[var(--primary-color)]" id="top-work-name">--</div>
+                        <div class="text-sm text-gray-500" id="top-work-count">Connetti per vedere</div>
+                    </div>
+                    <div class="bg-white/80 p-4 rounded-lg border border-gray-200">
+                        <div class="text-sm text-gray-600 mb-2">Compositore più prolifico</div>
+                        <div class="text-2xl font-bold text-[var(--primary-color)]" id="top-composer-name">--</div>
+                        <div class="text-sm text-gray-500" id="top-composer-count">Connetti per vedere</div>
+                    </div>
+                    <div class="bg-white/80 p-4 rounded-lg border border-gray-200">
+                        <div class="text-sm text-gray-600 mb-2">Artista più attivo</div>
+                        <div class="text-2xl font-bold text-[var(--primary-color)]" id="top-artist-name">--</div>
+                        <div class="text-sm text-gray-500" id="top-artist-count">Connetti per vedere</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+   <footer class="border-t border-gray-200 py-10">
+  <div class="container mx-auto px-6 text-center space-y-3">
+
+    <div class="text-xs uppercase tracking-widest text-gray-500">
+      NeoTheatre Knowledge Graph
+    </div>
+
+    <div class="text-sm text-gray-600">
+      Progetto di tesi (LM DHDK 2026)
+    </div>
+
+    <div class="pt-4 text-xs text-gray-400">
+      © Elena Binotti
+    </div>
+
+  </div>
+</footer>
+
+
+    <script>
+        lucide.createIcons();
+
+        let driver;
+        const NEO4J_URI = 'bolt://archiuidev.promemoriagroup.com:7687';
+        let artistsChart, composersChart;
+        let isConnected = false;
+
+        // --- INIT ---
+        window.addEventListener('load', () => {
+            const u = sessionStorage.getItem('neo4j_user');
+            const p = sessionStorage.getItem('neo4j_pass');
+            
+            if (u && p) {
+                // Prova a riconnettersi automaticamente
+                connectToDB(u, p, true);
+            } else {
+                // Mostra il modal solo se non ci sono credenziali salvate
+                setTimeout(() => {
+                    openLoginModal();
+                }, 500);
+            }
+        });
+
+        // --- MODAL UTILS ---
+        function openLoginModal() { 
+            document.getElementById('login-modal').classList.add('open');
+        }
+        
+        function closeLoginModal() { 
+            document.getElementById('login-modal').classList.remove('open');
+        }
+
+        // Aggiungo click fuori dal modal per chiuderlo
+        document.getElementById('login-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeLoginModal();
+            }
+        });
+
+        // --- CONNECTION ---
+        document.getElementById('db-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            connectToDB(
+                document.getElementById('input-user').value,
+                document.getElementById('input-password').value,
+                false
+            );
+        });
+
+        async function connectToDB(user, pass, silent = false) {
+            const errDiv = document.getElementById('login-error');
+            errDiv.classList.add('hidden');
+            
+            try {
+                driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(user, pass));
+                await driver.verifyConnectivity();
+                
+                sessionStorage.setItem('neo4j_user', user);
+                sessionStorage.setItem('neo4j_pass', pass);
+                isConnected = true;
+                
+                // Chiudi il modal solo se non è una riconnessione automatica
+                if (!silent) {
+                    closeLoginModal();
+                }
+                
+                // Update UI
+                document.getElementById('db-indicator').className = 'status-dot status-online';
+                document.getElementById('db-text').textContent = 'Connected';
+                document.getElementById('db-status-badge').className = 'flex items-center gap-2 px-3 py-1 bg-green-100 border border-green-200 rounded-full cursor-default';
+                document.getElementById('db-text').classList.remove('text-gray-500');
+                document.getElementById('db-text').classList.add('text-green-700');
+                
+                // Cambia il comportamento del badge: non apre più il modal
+                document.getElementById('db-status-badge').onclick = null;
+
+                // Load Data
+                loadStats();
+                loadArtistsData();
+                loadRolesData();
+                loadComposersData();
+                loadWorksData();
+                loadBridgeRoleInsight();
+
+
+            } catch (err) {
+                console.error(err);
+                isConnected = false;
+                
+                // Se non è una riconnessione automatica, mostra l'errore
+                if (!silent) {
+                    errDiv.textContent = "Connessione fallita: " + err.message;
+                    errDiv.classList.remove('hidden');
+                } else {
+                    // Se la riconnessione automatica fallisce, mostra il modal
+                    setTimeout(() => {
+                        if (!isConnected) {
+                            openLoginModal();
+                        }
+                    }, 1000);
+                }
+                
+                // Aggiorna UI per stato offline
+                document.getElementById('db-indicator').className = 'status-dot status-offline';
+                document.getElementById('db-text').textContent = 'Not Connected';
+                document.getElementById('db-status-badge').className = 'flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer hover:bg-gray-200 transition-colors';
+                document.getElementById('db-text').classList.remove('text-green-700');
+                document.getElementById('db-text').classList.add('text-gray-500');
+                document.getElementById('db-status-badge').onclick = openLoginModal;
+            }
+        }
+
+        // --- LOAD STATS ---
+        async function loadStats() {
+            if (!driver) return;
+            
+            const session = driver.session();
+            try {
+                const queries = {
+                    people: "MATCH (n:Person) RETURN count(n) as count",
+                    works: "MATCH (n:Work) RETURN count(n) as count",
+                    productions: "MATCH (n:Production) RETURN count(n) as count",
+                    performances: "MATCH (n:Performance) RETURN count(n) as count"
+                };
+
+                for (const [key, query] of Object.entries(queries)) {
+                    const result = await session.run(query);
+                    const count = result.records[0].get('count').low;
+                    document.getElementById(`stat-${key}`).textContent = count.toLocaleString();
+                }
+            } catch (e) {
+                console.error("Errore caricamento statistiche:", e);
+            } finally {
+                await session.close();
+            }
+        }
+
+        // --- LOAD ARTISTS DATA ---
+        async function loadArtistsData() {
+            if (!driver) return;
+            
+            const session = driver.session();
+            try {
+                const result = await session.run(`
+                    // Artisti più ricorrenti nelle performance
+                    MATCH (p:Person)-[r:PERFORMED_IN|CONDUCTED|DIRECTED]->(:Performance)
+                    RETURN 
+                        p.name as name, 
+                        p.wikidata_qid as qid,
+                        [(id:ID)-[:IS_ID_OF]->(p) | id.code][0] as id_code,
+                        count(r) as count
+                    ORDER BY count DESC
+                    LIMIT 10
+                `);
+                
+                if (result.records.length === 0) {
+                    document.getElementById('artists-list').innerHTML = '<p class="text-gray-500 text-center">Nessun artista trovato</p>';
+                    return;
+                }
+
+                const labels = result.records.map(r => r.get('name'));
+                const data = result.records.map(r => r.get('count').low);
+                const idCodes = result.records.map(r => r.get('id_code'));
+                const qids = result.records.map(r => r.get('qid'));
+
+                // Update top artist insight
+                if (result.records.length > 0) {
+                    document.getElementById('top-artist-name').textContent = labels[0];
+                    document.getElementById('top-artist-count').textContent = data[0] + ' partecipazioni';
+                }
+
+                // Create chart
+                const ctx = document.getElementById('topArtistsChart').getContext('2d');
+                if (artistsChart) artistsChart.destroy();
+                
+                artistsChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Numero di Partecipazioni',
+                            data: data,
+                            backgroundColor: 'rgba(207, 23, 28, 0.7)',
+                            borderColor: 'rgba(207, 23, 28, 1)',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        },
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const name = labels[index];
+                                const qid = qids[index];
+                                const idCode = idCodes[index];
+                                
+                                // Costruisci URL usando il codice ID
+                                if (idCode) {
+                                    window.location.href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                                } else if (qid) {
+                                    window.location.href = `entity.html?qid=${qid}`;
+                                } else {
+                                    window.location.href = `entity.html?name=${encodeURIComponent(name)}`;
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Populate artists list
+                const artistsList = document.getElementById('artists-list');
+                artistsList.innerHTML = result.records.map((r, index) => {
+                    const name = r.get('name');
+                    const idCode = r.get('id_code');
+                    const qid = r.get('qid');
+                    const count = r.get('count').low;
+                    
+                    // Costruisci URL
+                    let href = '';
+                    if (idCode) {
+                        href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                    } else if (qid) {
+                        href = `entity.html?qid=${qid}`;
+                    } else {
+                        href = `entity.html?name=${encodeURIComponent(name)}`;
+                    }
+                    
+                    return `
+                    <a href="${href}" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors block hover:no-underline">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg font-bold text-gray-400">${index + 1}</span>
+                            <span class="font-medium text-gray-800">${name}</span>
+                        </div>
+                        <span class="bg-[var(--primary-color)] text-white px-3 py-1 rounded-full text-sm font-mono">
+                            ${count}
+                        </span>
+                    </a>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error("Errore caricamento artisti:", e);
+                document.getElementById('artists-list').innerHTML = '<p class="text-red-500 text-center">Errore caricamento artisti</p>';
+            } finally {
+                await session.close();
+            }
+        }
+
+        // --- LOAD ROLES DATA ---
+        async function loadRolesData() {
+            if (!driver) return;
+            
+            const session = driver.session();
+            try {
+                const result = await session.run(`
+                    // Ruoli più frequenti (personaggi)
+                    MATCH (c:Character)<-[:INTERPRETED]-(:Person)
+                    WHERE c.name IS NOT NULL AND c.name <> ''
+                    RETURN c.name as name, count(*) as count
+                    ORDER BY count DESC
+                    LIMIT 15
+                `);
+                
+                if (result.records.length === 0) {
+                    document.getElementById('roles-cloud').innerHTML = '<p class="text-gray-500 text-center">Nessun ruolo trovato</p>';
+                    return;
+                }
+
+                // Create roles cloud
+                const rolesCloud = document.getElementById('roles-cloud');
+                rolesCloud.innerHTML = '';
+                
+                result.records.forEach((r, index) => {
+                    const role = r.get('name');
+                    const count = r.get('count').low;
+                    const fontSize = Math.min(24, Math.max(12, 12 + (count / 5)));
+                    
+                    const badge = document.createElement('a');
+                    badge.href = `entity.html?type=character&name=${encodeURIComponent(role)}`;
+                    badge.className = 'role-badge cursor-pointer hover:scale-105 transition-transform block hover:no-underline';
+                    badge.innerHTML = `
+                        <div class="font-medium text-gray-800">${role}</div>
+                        <div class="text-xs text-gray-600 mt-1 font-mono">${count}</div>
+                    `;
+                    badge.style.fontSize = `${fontSize}px`;
+                    
+                    rolesCloud.appendChild(badge);
+                });
+
+                // Populate detailed list
+                const rolesList = document.getElementById('roles-list');
+                rolesList.innerHTML = result.records.slice(0, 5).map(r => `
+                    <a href="entity.html?type=character&name=${encodeURIComponent(r.get('name'))}" class="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 hover:bg-gray-50 px-2 py-1 rounded block hover:no-underline">
+                        <span class="font-medium text-gray-800">${r.get('name')}</span>
+                        <span class="bg-gray-100 px-2 py-0.5 rounded text-xs text-gray-600 font-mono">${r.get('count').low}</span>
+                    </a>
+                `).join('');
+
+            } catch (e) {
+                console.error("Errore caricamento ruoli:", e);
+                document.getElementById('roles-cloud').innerHTML = '<p class="text-red-500 text-center">Errore caricamento ruoli</p>';
+            } finally {
+                await session.close();
+            }
+        }
+
+        // --- LOAD BRIDGE ROLE INSIGHT (Character presente in più opere) ---
+async function loadBridgeRoleInsight() {
+  if (!driver) return;
+
+  const session = driver.session();
+  const loading = document.getElementById('bridge-role-loading');
+  const content = document.getElementById('bridge-role-content');
+  const empty = document.getElementById('bridge-role-empty');
+
+  // Relazioni possibili tra Character e Work (metto una lista “ampia” per non bloccarti)
+  const relTypes = [
+    'CHARACTER_IN', 'IS_CHARACTER_IN', 'APPEARS_IN', 'ROLE_IN', 'HAS_CHARACTER', 'IN_WORK'
+  ];
+
+  try {
+    // Query robusta: matcha Character->Work con relazioni in lista.
+    // Se nel tuo modello è Work->Character invertita, questa non trova nulla (e mostriamo fallback).
+    const result = await session.run(`
+      MATCH (c:Character)-[rw]->(w:Work)
+      WHERE type(rw) IN $rels
+        AND c.name IS NOT NULL AND trim(c.name) <> ''
+        AND w.title IS NOT NULL AND trim(w.title) <> ''
+      OPTIONAL MATCH (p:Person)-[:INTERPRETED]->(c)
+      WITH c,
+           count(DISTINCT w) AS worksCount,
+           count(DISTINCT p) AS peopleCount
+      ORDER BY worksCount DESC, peopleCount DESC
+      LIMIT 1
+      RETURN c.name AS role, worksCount, peopleCount
+    `, { rels: relTypes });
+
+    if (result.records.length === 0) {
+      // Fallback: prova anche il verso inverso Work->Character
+      const result2 = await session.run(`
+        MATCH (w:Work)-[rw]->(c:Character)
+        WHERE type(rw) IN $rels
+          AND c.name IS NOT NULL AND trim(c.name) <> ''
+          AND w.title IS NOT NULL AND trim(w.title) <> ''
+        OPTIONAL MATCH (p:Person)-[:INTERPRETED]->(c)
+        WITH c,
+             count(DISTINCT w) AS worksCount,
+             count(DISTINCT p) AS peopleCount
+        ORDER BY worksCount DESC, peopleCount DESC
+        LIMIT 1
+        RETURN c.name AS role, worksCount, peopleCount
+      `, { rels: relTypes });
+
+      if (result2.records.length === 0) {
+        loading.classList.add('hidden');
+        empty.classList.remove('hidden');
+        lucide.createIcons();
+        return;
+      }
+
+      // usa result2
+      const rec = result2.records[0];
+      const role = rec.get('role');
+      const worksCount = rec.get('worksCount').low ?? rec.get('worksCount');
+      const peopleCount = rec.get('peopleCount').low ?? rec.get('peopleCount');
+
+      document.getElementById('bridge-role-name').textContent = role;
+      document.getElementById('bridge-role-works').textContent = worksCount.toLocaleString();
+      document.getElementById('bridge-role-people').textContent = peopleCount.toLocaleString();
+      document.getElementById('bridge-role-link').href =
+        `entity.html?type=character&name=${encodeURIComponent(role)}`;
+
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+      lucide.createIcons();
+      return;
+    }
+
+    // caso “trovato” al primo giro
+    const rec = result.records[0];
+    const role = rec.get('role');
+    const worksCount = rec.get('worksCount').low ?? rec.get('worksCount');
+    const peopleCount = rec.get('peopleCount').low ?? rec.get('peopleCount');
+
+    document.getElementById('bridge-role-name').textContent = role;
+    document.getElementById('bridge-role-works').textContent = worksCount.toLocaleString();
+    document.getElementById('bridge-role-people').textContent = peopleCount.toLocaleString();
+    document.getElementById('bridge-role-link').href =
+      `entity.html?type=character&name=${encodeURIComponent(role)}`;
+
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+    lucide.createIcons();
+
+  } catch (e) {
+    console.error("Errore bridge role insight:", e);
+    loading.innerHTML = `<p class="text-red-500 text-sm">Errore: ${e.message}</p>`;
+  } finally {
+    await session.close();
+  }
+}
+
+
+        // --- LOAD COMPOSERS DATA ---
+        async function loadComposersData() {
+            if (!driver) return;
+            
+            const session = driver.session();
+            try {
+                const result = await session.run(`
+                    // Compositori più rappresentati
+                    MATCH (p:Person)-[:IS_COMPOSER]->(w:Work)
+                    WITH p, count(DISTINCT w) as workCount
+                    
+                    OPTIONAL MATCH (p)-[:IS_COMPOSER]->(w2:Work)<-[:RELATED_TO_WORK]-(prod:Production)
+                    WITH p, workCount, count(DISTINCT prod) as productionCount
+                    
+                    RETURN 
+                        p.name as name,
+                        p.wikidata_qid as qid,
+                        [(id:ID)-[:IS_ID_OF]->(p) | id.code][0] as id_code,
+                        productionCount as count
+                    ORDER BY productionCount DESC, workCount DESC
+                    LIMIT 8
+                `);
+                
+                if (result.records.length === 0) {
+                    document.getElementById('composers-list').innerHTML = '<p class="text-gray-500 text-center">Nessun compositore trovato</p>';
+                    return;
+                }
+
+                const labels = result.records.map(r => r.get('name'));
+                const data = result.records.map(r => r.get('count').low || 0);
+                const idCodes = result.records.map(r => r.get('id_code'));
+                const qids = result.records.map(r => r.get('qid'));
+
+                // Update top composer insight
+                if (result.records.length > 0) {
+                    document.getElementById('top-composer-name').textContent = labels[0];
+                    document.getElementById('top-composer-count').textContent = data[0] + ' opere rappresentate';
+                }
+
+                // Create chart
+                const ctx = document.getElementById('topComposersChart').getContext('2d');
+                if (composersChart) composersChart.destroy();
+                
+                composersChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: [
+                                'rgba(207, 23, 28, 0.8)',
+                                'rgba(26, 23, 26, 0.8)',
+                                'rgba(74, 59, 92, 0.8)',
+                                'rgba(100, 100, 100, 0.8)',
+                                'rgba(200, 200, 200, 0.8)',
+                                'rgba(150, 150, 150, 0.8)',
+                                'rgba(180, 180, 180, 0.8)',
+                                'rgba(120, 120, 120, 0.8)'
+                            ],
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    boxWidth: 12,
+                                    padding: 15
+                                }
+                            }
+                        },
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const name = labels[index];
+                                const qid = qids[index];
+                                const idCode = idCodes[index];
+                                
+                                if (idCode) {
+                                    window.location.href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                                } else if (qid) {
+                                    window.location.href = `entity.html?qid=${qid}`;
+                                } else {
+                                    window.location.href = `entity.html?name=${encodeURIComponent(name)}`;
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Populate composers list
+                const composersList = document.getElementById('composers-list');
+                composersList.innerHTML = result.records.map((r, index) => {
+                    const name = r.get('name');
+                    const idCode = r.get('id_code');
+                    const qid = r.get('qid');
+                    const count = r.get('count').low || 0;
+                    
+                    let href = '';
+                    if (idCode) {
+                        href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                    } else if (qid) {
+                        href = `entity.html?qid=${qid}`;
+                    } else {
+                        href = `entity.html?name=${encodeURIComponent(name)}`;
+                    }
+                    
+                    return `
+                    <a href="${href}" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors block hover:no-underline">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-gray-500">${index + 1}.</span>
+                            <span class="font-medium text-gray-800">${name}</span>
+                        </div>
+                        <span class="bg-gray-800 text-white px-2 py-1 rounded text-xs font-mono">
+                            ${count} opere
+                        </span>
+                    </a>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error("Errore caricamento compositori:", e);
+                document.getElementById('composers-list').innerHTML = '<p class="text-red-500 text-center">Errore caricamento compositori</p>';
+            } finally {
+                await session.close();
+            }
+        }
+
+        // --- LOAD WORKS DATA ---
+        async function loadWorksData() {
+            if (!driver) return;
+            
+            const session = driver.session();
+            try {
+                const result = await session.run(`
+                    // Opere più rappresentate
+                    MATCH (w:Work)<-[:RELATED_TO_WORK]-(p:Production)
+                    WHERE w.title IS NOT NULL AND w.title <> '' AND w.title <> 'null'
+                    RETURN 
+                        w.title as title,
+                        w.wikidata_qid as qid,
+                        [(id:ID)-[:IS_ID_OF]->(w) | id.code][0] as id_code,
+                        count(DISTINCT p) as count
+                    ORDER BY count DESC
+                    LIMIT 10
+                `);
+                
+                if (result.records.length === 0) {
+                    document.getElementById('works-list').innerHTML = '<p class="text-gray-500 text-center">Nessuna opera trovata</p>';
+                    return;
+                }
+
+                // Update top work insight
+                if (result.records.length > 0) {
+                    document.getElementById('top-work-name').textContent = result.records[0].get('title');
+                    document.getElementById('top-work-count').textContent = result.records[0].get('count').low + ' rappresentazioni';
+                }
+
+                // Populate works list
+                const worksList = document.getElementById('works-list');
+                worksList.innerHTML = await Promise.all(result.records.map(async (r, index) => {
+                    const title = r.get('title');
+                    const idCode = r.get('id_code');
+                    const qid = r.get('qid');
+                    const count = r.get('count').low;
+                    const composer = await getComposerForWork(title);
+                    
+                    // Costruisci URL
+                    let href = '';
+                    if (idCode) {
+                        href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                    } else if (qid) {
+                        href = `entity.html?qid=${qid}`;
+                    } else {
+                        href = `entity.html?title=${encodeURIComponent(title)}`;
+                    }
+                    
+                    return `
+                    <a href="${href}" class="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:border-[var(--primary-color)]/50 transition-colors group block hover:no-underline">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <div class="w-10 h-10 flex items-center justify-center bg-[var(--primary-color)]/10 text-[var(--primary-color)] font-bold rounded-lg group-hover:bg-[var(--primary-color)] group-hover:text-white transition-colors">
+                                    ${index + 1}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-800 group-hover:text-[var(--primary-color)] transition-colors">${title}</div>
+                                <div class="text-xs text-gray-500 mt-1">${composer}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-bold text-[var(--primary-color)]">${count}</div>
+                            <div class="text-xs text-gray-500">rappresentazioni</div>
+                        </div>
+                    </a>
+                    `;
+                }));
+
+            } catch (e) {
+                console.error("Errore caricamento opere:", e);
+                document.getElementById('works-list').innerHTML = '<p class="text-red-500 text-center">Errore caricamento opere</p>';
+            } finally {
+                await session.close();
+            }
+        }
+
+        // Helper function to get composer for work
+        async function getComposerForWork(workTitle) {
+            if (!driver) return 'Compositore sconosciuto';
+            
+            try {
+                const session = driver.session();
+                const result = await session.run(`
+                    MATCH (p:Person)-[:IS_COMPOSER]->(w:Work {title: $title})
+                    RETURN p.name as name 
+                    ORDER BY p.source DESC 
+                    LIMIT 1
+                `, { title: workTitle });
+                
+                await session.close();
+                
+                return result.records.length > 0 ? result.records[0].get('name') : 'Compositore sconosciuto';
+            } catch (e) {
+                console.warn("Errore recupero compositore per opera:", e);
+                return 'Compositore sconosciuto';
+            }
+        }
+
+        // FUNZIONI PER TIMELINE E SEARCH
+        function renderCards(records, gridElement) {
+            gridElement.innerHTML = records.map(rec => {
+                const p = rec.get('p').properties;
+                const composer = rec.get('composer') || "Autore vari";
+                const title = p.title || "Produzione senza titolo";
+                
+                // Ottieni ID tramite nodo ID collegato
+                const idCode = rec.get('id_code') || '';
+                
+                // Immagini casuali
+                const randomImg = [
+                    "https://images.unsplash.com/photo-1574267432553-4b4628081c31?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1514306191717-452ec28c7814?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                    "https://images.unsplash.com/photo-1543005471-d5e13c6a11be?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                ];
+
+                const displayDate = p.date ? p.date.split('T')[0] : '';
+                const source = p.source || 'Archivio';
+
+                // Costruisci URL usando ID se disponibile
+                const href = idCode ? `entity.html?id=${encodeURIComponent(idCode)}` : `entity.html?title=${encodeURIComponent(title)}`;
+
+                return `
+                    <a href="${href}" class="regio-card bg-white rounded-lg overflow-hidden cursor-pointer group flex flex-col h-full block hover:no-underline">
+                        <div class="aspect-[4/3] overflow-hidden relative">
+                            <img src="${randomImg[Math.floor(Math.random() * 3)]}" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700">
+                            <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                            <div class="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/60 to-transparent">
+                                <span class="text-white text-xs font-bold uppercase tracking-widest border-b border-white/50 pb-1">${source}</span>
+                            </div>
+                        </div>
+                        <div class="p-6 flex flex-col flex-grow">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 block">${composer}</span>
+                            <h3 class="serif text-2xl text-gray-900 mb-2 leading-tight group-hover:text-[var(--primary-color)] transition-colors">${title}</h3>
+                            <div class="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+                                <span class="text-xs text-gray-500 font-mono uppercase tracking-wider">${displayDate}</span>
+                                <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400 group-hover:text-[var(--primary-color)] group-hover:translate-x-1 transition-all"></i>
+                            </div>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renderCardsResult(result) {
+            const container = document.getElementById('results-container');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            result.records.forEach(record => {
+                const mainNode = record.get('n');
+                const nodeType = mainNode.labels[0];
+                const properties = mainNode.properties;
+                
+                // Ottieni ID collegato
+                const idCode = record.get('id_code') || '';
+                
+                // Costruisci il link in base al tipo di nodo
+                let href = '';
+                let displayName = '';
+                
+                if (nodeType === 'Production' || nodeType === 'Work' || nodeType === 'Person' || 
+                    nodeType === 'Season' || nodeType === 'Performance') {
+                    displayName = properties.name || properties.title || 'Senza titolo';
+                    
+                    if (idCode) {
+                        href = `entity.html?id=${encodeURIComponent(idCode)}`;
+                    } else if (properties.wikidata_qid) {
+                        href = `entity.html?qid=${properties.wikidata_qid}`;
+                    } else {
+                        href = `entity.html?name=${encodeURIComponent(displayName)}&type=${nodeType.toLowerCase()}`;
+                    }
+                } else if (nodeType === 'Character') {
+                    href = `entity.html?type=character&name=${encodeURIComponent(properties.name || '')}`;
+                    displayName = properties.name || 'Personaggio senza nome';
+                } else {
+                    href = `entity.html?type=${nodeType.toLowerCase()}&name=${encodeURIComponent(properties.name || properties.title || 'Senza nome')}`;
+                    displayName = properties.name || properties.title || 'Senza nome';
+                }
+                
+                const card = document.createElement('a');
+                card.href = href;
+                card.className = 'regio-card bg-white rounded-lg overflow-hidden cursor-pointer group flex flex-col h-full block hover:no-underline';
+                
+                card.innerHTML = `
+                    <div class="aspect-[4/3] overflow-hidden relative">
+                        <img src="https://images.unsplash.com/photo-1574267432553-4b4628081c31?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+                             class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700">
+                        <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                        <div class="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/60 to-transparent">
+                            <span class="text-white text-xs font-bold uppercase tracking-widest border-b border-white/50 pb-1">${nodeType}</span>
+                        </div>
+                    </div>
+                    <div class="p-6 flex flex-col flex-grow">
+                        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 block">${nodeType}</span>
+                        <h3 class="serif text-2xl text-gray-900 mb-2 leading-tight group-hover:text-[var(--primary-color)] transition-colors">
+                            ${displayName}
+                        </h3>
+                        <div class="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+                            <span class="text-xs text-gray-500 font-mono uppercase tracking-wider">${properties.source || 'Database'}</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400 group-hover:text-[var(--primary-color)] group-hover:translate-x-1 transition-all"></i>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
+            
+            lucide.createIcons();
+        }
+
+    </script>
+</body>
+</html>

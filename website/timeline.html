@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline & Produzioni</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- D3.js e Force Graph -->
+    <script src="https://unpkg.com/d3"></script>
+    <script src="https://unpkg.com/force-graph"></script>
+    
+    <!-- Neo4j Driver -->
+    <script src="https://unpkg.com/neo4j-driver"></script>
+    
+    <!-- Font e Icone -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --primary-color: #cf171c;
+            --secondary-color: #1a171a;
+            --accent-purple: #4a3b5c;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--secondary-color);
+            background-color: var(--bg-light);
+        }
+
+        .typog-hero { font-family: 'Playfair Display', serif; font-size: 3rem; line-height: 1.1; font-weight: 600; }
+        .typog-header2 { font-family: 'Playfair Display', serif; font-size: 2rem; line-height: 1.2; font-weight: 500; }
+        
+        /* Status dots */
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-online { background-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .status-offline { background-color: #ef4444; }
+
+        /* Modal */
+        .modal { transition: opacity 0.3s ease-in-out; opacity: 0; pointer-events: none; z-index: 1000; }
+        .modal.open { opacity: 1; pointer-events: auto; }
+
+        /* TIMELINE STYLES - Versione migliorata - SCROLL NORMALE DA SINISTRA A DESTRA */
+        .timeline-scroll-container {
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 1rem 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary-color) #f1f1f1;
+            /* RIMOSSO: direction: rtl; */
+        }
+        .timeline-scroll-container::-webkit-scrollbar {
+            height: 6px;
+        }
+        .timeline-scroll-container::-webkit-scrollbar-thumb {
+            background-color: var(--primary-color);
+            border-radius: 3px;
+        }
+        .timeline-scroll-container::-webkit-scrollbar-track {
+            background-color: #f1f1f1;
+        }
+        .timeline-year-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            min-height: 80px;
+            min-width: 55px;
+            margin-right: 0.75rem; /* CAMBIATO: da margin-left a margin-right */
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #6b7280;
+            padding-bottom: 0.5rem;
+        }
+        .timeline-year-btn:hover {
+            color: var(--primary-color);
+        }
+        .timeline-year-btn.active {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+        .timeline-year-text {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.5px;
+        }
+        .timeline-year-bar {
+            width: 2px;
+            height: 20px;
+            background-color: #d1d5db;
+            transition: all 0.3s ease;
+        }
+        .timeline-year-btn:hover .timeline-year-bar,
+        .timeline-year-btn.active .timeline-year-bar {
+            height: 40px;
+            background-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(207, 23, 28, 0.3);
+        }
+
+        /* LISTA STILE PDF CON TOGGLE */
+        .productions-list-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .productions-list-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .productions-list-header {
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .productions-list-header:hover {
+            background-color: #f9fafb;
+        }
+
+        .productions-list-title {
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--secondary-color);
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .productions-list-title:hover {
+            color: var(--primary-color);
+        }
+
+        .productions-list-subtitle {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .productions-list-toggle {
+            color: var(--primary-color);
+            transition: transform 0.3s ease;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .productions-list-toggle:hover {
+            background-color: #f3f4f6;
+        }
+
+        .productions-list-item.expanded .productions-list-toggle {
+            transform: rotate(180deg);
+        }
+
+        .productions-list-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .productions-list-item.expanded .productions-list-content {
+            max-height: 1000px; /* Valore sufficientemente grande */
+        }
+
+        .productions-list-details {
+            padding: 1.25rem;
+            background-color: #f9fafb;
+        }
+
+        .productions-list-description {
+            font-size: 0.875rem;
+            color: #4b5563;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .productions-list-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .productions-list-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+
+        .productions-list-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* Stato per elementi con dati minimi */
+        .productions-list-item.minimal {
+            background-color: #f9fafb;
+            border-color: #e5e7eb;
+        }
+
+        .productions-list-item.minimal .productions-list-header {
+            cursor: default;
+        }
+
+        .productions-list-item.minimal .productions-list-header:hover {
+            background-color: transparent;
+        }
+
+        /* Stile per stagioni/raggruppamenti (come nel PDF) */
+        .season-header {
+            background-color: #1a171a;
+            color: white;
+            border-color: #1a171a;
+        }
+
+        .season-header:hover {
+            background-color: #2a272a;
+        }
+
+        .season-header .productions-list-title {
+            color: white;
+            font-weight: 600;
+        }
+
+        .season-header .productions-list-subtitle {
+            color: #d1d5db;
+        }
+
+        /* Source Filter Styles - Versione toggle */
+        .source-filter-container {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+        .source-filter-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            border: 1px solid #d1d5db;
+            background-color: white;
+            color: #4b5563;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+        .source-filter-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .source-filter-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .source-filter-btn.active:hover {
+            background-color: #a00f14;
+            border-color: #a00f14;
+        }
+        
+        /* Stato filtro "nessun filtro" */
+        .source-filter-btn.no-filter {
+            background-color: #f3f4f6;
+            border-color: #d1d5db;
+            color: #6b7280;
+        }
+        .source-filter-btn.no-filter.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        /* Badge per filtro multiplo */
+        .multi-filter-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+
+        /* ===== TIMELINE: numeri più grandi + hover rosso + scrollbar rossa ===== */
+
+/* Scrollbar (Chrome/Safari/Edge) */
+.timeline-scroll-container::-webkit-scrollbar {
+  height: 10px;              /* più “decisa” */
+}
+.timeline-scroll-container::-webkit-scrollbar-track {
+  background-color: #e5e7eb; /* grigio chiaro */
+  border-radius: 9999px;
+}
+.timeline-scroll-container::-webkit-scrollbar-thumb {
+  background-color: var(--primary-color); /* rosso */
+  border-radius: 9999px;
+  border: 2px solid #e5e7eb; /* effetto “pill” pulito */
+}
+.timeline-scroll-container::-webkit-scrollbar-thumb:hover {
+  background-color: #a00f14; /* rosso più scuro in hover */
+}
+
+/* Scrollbar (Firefox) */
+.timeline-scroll-container {
+  scrollbar-width: auto; /* da thin -> più visibile */
+  scrollbar-color: var(--primary-color) #e5e7eb;
+}
+
+/* Pulsante anno: più “solido” */
+.timeline-year-btn {
+  min-height: 92px;   /* un pelo più alta */
+  min-width: 62px;    /* più respiro */
+  margin-right: 0.9rem;
+  padding-bottom: 0.75rem;
+  color: #6b7280;
+  transition: color 0.2s ease, transform 0.15s ease;
+}
+
+.timeline-year-btn:hover {
+  color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.timeline-year-btn.active {
+  color: var(--primary-color);
+  font-weight: 800;
+}
+
+/* NUMERI: più grandi e decisi */
+.timeline-year-text {
+  font-size: 1.15rem;   /* più grande */
+  font-weight: 800;     /* più deciso */
+  letter-spacing: -0.02em;
+  margin-bottom: 0.35rem;
+  text-rendering: geometricPrecision;
+}
+
+/* Barra: più spessa e rossa in hover */
+.timeline-year-bar {
+  width: 4px;           /* da 2px -> più decisa */
+  height: 18px;
+  background-color: #d1d5db;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+.timeline-year-btn:hover .timeline-year-bar,
+.timeline-year-btn.active .timeline-year-bar {
+  height: 48px; /* più alta */
+  background-color: var(--primary-color);
+  box-shadow: 0 0 10px rgba(207, 23, 28, 0.35);
+}
+
+/* ===== FILTRI: segmented, larghi, senza icone ===== */
+
+.source-filter-container{ display:none; } /* opzionale: se vuoi disattivare il vecchio layout */
+
+.source-filter-segment{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 640px){
+  .source-filter-segment{
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+.source-seg-btn{
+  width: 100%;
+  padding: 0.9rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  transition: all 0.18s ease;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.04);
+}
+
+.source-seg-btn:hover{
+  border-color: rgba(207, 23, 28, 0.35);
+  box-shadow: 0 14px 30px rgba(207, 23, 28, 0.10);
+  transform: translateY(-1px);
+}
+
+.source-seg-btn.active{
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+  box-shadow: 0 16px 34px rgba(207, 23, 28, 0.22);
+}
+
+/* ===== FILTERS inside HERO — horizontal only ===== */
+
+.source-filter-segment.hero{
+  display: flex;
+  gap: 14px;
+  flex-wrap: nowrap;        /* 🔒 mai a capo */
+  align-items: center;
+}
+
+.source-filter-segment.hero .source-seg-btn{
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.88);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;      /* testo su una riga */
+  transition: all 0.18s ease;
+}
+
+.source-filter-segment.hero .source-seg-btn:hover{
+  border-color: rgba(207,23,28,0.75);
+  color: #fff;
+  background: rgba(207,23,28,0.16);
+}
+
+.source-filter-segment.hero .source-seg-btn.active{
+  border-color: rgba(207,23,28,0.95);
+  background: rgba(207,23,28,0.95);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(207, 23, 28, 0.25);
+}
+
+
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="modal fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 border border-gray-200">
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="database" class="w-6 h-6 text-[var(--primary-color)]"></i>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900">Connessione Neo4j</h2>
+                <p class="text-sm text-gray-500 mt-1">Inserisci le credenziali dal file <code>env.env</code></p>
+            </div>
+            <form id="db-login-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Neo4j URI</label>
+                    <input type="text" id="input-uri" value="bolt://archiuidev.promemoriagroup.com:7687" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono" readonly>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">User (ID)</label>
+                    <input type="text" id="input-user" placeholder="neo4j" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password (SECRET_KEY)</label>
+                    <input type="password" id="input-password" placeholder="••••••••" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div id="login-error" class="text-red-500 text-xs text-center hidden font-bold"></div>
+                <button type="submit" class="w-full px-4 py-2 bg-[var(--primary-color)] text-white rounded-lg hover:bg-red-700 text-sm font-medium shadow-lg shadow-red-500/30">Connetti</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="container mx-auto px-6 py-5 flex items-center justify-between sticky inset-x-0 top-0 bg-white/95 backdrop-blur-sm z-50 border-b border-gray-100 shadow-sm">
+        <a href="index.html" class="flex items-center gap-3">
+            <svg class="h-8 w-auto text-black" viewBox="0 0 50 50" fill="currentColor">
+                <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
+                <path d="M22 15h6v20h-6z"/>
+            </svg>
+            <span class="font-semibold text-lg tracking-tight hidden sm:block">NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span></span>
+        </a>
+        <div class="flex items-center gap-6">
+            <div id="db-status-badge" class="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer" onclick="openLoginModal()">
+                <span id="db-indicator" class="status-dot status-offline"></span>
+                <span id="db-text" class="text-[10px] font-mono text-gray-500 font-bold uppercase">Not Connected</span>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium">
+                <a href="index.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Home</a>
+                <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+                <a href="#" class="text-[var(--primary-color)] font-bold">Timeline</a>
+                <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
+                <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pb-24">
+        <!-- HERO SECTION -->
+        <section class="bg-[#1a171a] text-white py-16 relative overflow-hidden">
+            <div class="container mx-auto px-6 relative z-10">
+              
+                <h1 class="typog-hero mb-6">Cronologia delle Produzioni</h1>
+                <p class="text-gray-400 text-lg leading-relaxed max-w-5xl">
+                    Esplora la storia del Teatro Regio attraverso una timeline interattiva. 
+                    Seleziona un anno per scoprire le produzioni andate in scena, con filtri per fonte e link diretti alle schede dettagliate.
+                </p>
+                <!-- FILTRI (dentro hero nero, orizzontali) -->
+<div class="mt-12">
+  <div class="source-filter-segment hero" role="tablist" aria-label="Filtra per fonte">
+    <button class="source-seg-btn active" id="filter-none" onclick="toggleSourceFilter('none')">Tutte le fonti</button>
+    <button class="source-seg-btn" id="filter-regio" onclick="toggleSourceFilter('Regio')">Teatro Regio</button>
+    <button class="source-seg-btn" id="filter-fondazione" onclick="toggleSourceFilter('Fondazione')">Fondazione I Teatri</button>
+  </div>
+</div>
+
+            </div>
+        </section>
+
+        
+
+
+        <!-- TIMELINE SECTION -->
+        <section class="container mx-auto px-6 py-8">
+
+  <!-- TIMELINE (senza riquadro) -->
+  <div class="mb-8">
+    <div class="relative w-full">
+      <div class="timeline-scroll-container flex items-end" id="timeline-years">
+        <div class="w-full text-center text-gray-400 py-4 italic">
+          Connettiti al database per caricare la timeline...
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 flex justify-end items-center text-sm text-gray-500">
+      <div id="selected-year-display" class="font-medium text-[var(--primary-color)]">
+        Nessun anno selezionato
+      </div>
+    </div>
+  </div>
+
+
+            <!-- LISTA DELLE PRODUZIONI (come nel PDF) -->
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="typog-header2 text-gray-800">Produzioni</h2>
+                    <div class="text-sm text-gray-500">
+                        <span id="productions-count">0</span> items
+                    </div>
+                </div>
+                
+                <div id="productions-container" class="min-h-[400px]">
+                    <!-- Stato iniziale -->
+                    <div id="initial-state" class="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-12 text-center">
+                        <i data-lucide="calendar-search" class="w-16 h-16 mx-auto mb-4 text-gray-300"></i>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">Nessun anno selezionato</h3>
+                        <p class="text-gray-500 max-w-md mx-auto">
+                            Seleziona un anno dalla timeline per visualizzare le produzioni andate in scena in quel periodo.
+                            Puoi anche utilizzare i filtri per restringere la ricerca per fonte.
+                        </p>
+                    </div>
+                    
+                    <!-- Stato di caricamento -->
+                    <div id="loading-state" class="hidden">
+                        <div class="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                            <i data-lucide="loader" class="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin"></i>
+                            <p class="text-gray-500">Caricamento produzioni in corso...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista delle produzioni (stile PDF) -->
+                    <div id="productions-list" class="hidden space-y-2">
+                        <!-- Le voci verranno inserite qui dinamicamente -->
+                    </div>
+                    
+                    <!-- Stato: nessun risultato -->
+                    <div id="no-results-state" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
+                        <i data-lucide="search-x" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">Nessuna produzione trovata</h3>
+                        <p class="text-gray-500 max-w-md mx-auto">
+                            Non sono state trovate produzioni per l'anno selezionato con i filtri applicati.
+                            Prova a selezionare un anno diverso o a modificare i filtri della fonte.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+   <footer class="border-t border-gray-200 py-10">
+  <div class="container mx-auto px-6 text-center space-y-3">
+
+    <div class="text-xs uppercase tracking-widest text-gray-500">
+      NeoTheatre Knowledge Graph
+    </div>
+
+    <div class="text-sm text-gray-600">
+      Progetto di tesi (LM DHDK 2026)
+    </div>
+
+    <div class="pt-4 text-xs text-gray-400">
+      © Elena Binotti
+    </div>
+
+  </div>
+</footer>
+
+
+    <!-- LOGICA JAVASCRIPT -->
+    <script>
+        lucide.createIcons();
+
+        // Variabili globali
+        let driver;
+        const NEO4J_URI = 'bolt://archiuidev.promemoriagroup.com:7687';
+        
+        // Stato dell'applicazione
+        let currentState = {
+            selectedYear: null,
+            activeFilters: [], // Array per filtri multipli
+            currentProductions: []
+        };
+
+        // Gestione login
+        window.addEventListener('load', () => {
+            const u = sessionStorage.getItem('neo4j_user');
+            const p = sessionStorage.getItem('neo4j_pass');
+            if (u && p) {
+                connectToDB(u, p);
+            } else {
+                // Mostra direttamente il modal di login
+                setTimeout(() => openLoginModal(), 500);
+            }
+        });
+
+        function openLoginModal() { 
+            document.getElementById('login-modal').classList.add('open'); 
+        }
+        function closeLoginModal() { 
+            document.getElementById('login-modal').classList.remove('open'); 
+        }
+
+        document.getElementById('db-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            connectToDB(
+                document.getElementById('input-user').value,
+                document.getElementById('input-password').value
+            );
+        });
+
+        async function connectToDB(user, pass) {
+            const errDiv = document.getElementById('login-error');
+            errDiv.classList.add('hidden');
+            
+            try {
+                driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(user, pass));
+                await driver.verifyConnectivity();
+                
+                sessionStorage.setItem('neo4j_user', user);
+                sessionStorage.setItem('neo4j_pass', pass);
+                closeLoginModal();
+                
+                // Aggiorna UI
+                document.getElementById('db-indicator').className = 'status-dot status-online';
+                document.getElementById('db-text').textContent = 'CONNECTED';
+                document.getElementById('db-status-badge').classList.add('bg-green-50', 'text-green-700', 'border-green-200');
+                
+                // Carica la timeline
+                loadTimelineYears();
+                
+            } catch (err) {
+                console.error(err);
+                errDiv.textContent = "Errore: " + err.message;
+                errDiv.classList.remove('hidden');
+                if (!document.getElementById('login-modal').classList.contains('open')) openLoginModal();
+            }
+        }
+
+        // ==================== FUNZIONI PER LA TIMELINE ====================
+
+        // Carica gli anni disponibili dalla timeline - QUERY MIGLIORATA
+        async function loadTimelineYears() {
+            if (!driver) {
+                console.error("Driver non connesso");
+                return;
+            }
+            
+            const container = document.getElementById('timeline-years');
+            container.innerHTML = '<div class="w-full text-center text-gray-400 py-4"><i data-lucide="loader" class="w-6 h-6 animate-spin inline mr-2"></i> Caricamento timeline...</div>';
+            lucide.createIcons();
+            
+            const session = driver.session();
+            
+            try {
+                // QUERY MIGLIORATA: Anni da produzioni che hanno recite
+                const result = await session.run(`
+                    MATCH (p:Production)-[:HAS_PERFORMANCE]->(perf:Performance)
+                    WHERE perf.date IS NOT NULL AND perf.date =~ '\\\\d{4}.*'
+                    WITH perf, substring(perf.date, 0, 4) AS year
+                    WHERE year IS NOT NULL AND size(year) = 4
+                    RETURN DISTINCT year 
+                    ORDER BY toInteger(year) DESC
+                `);
+                
+                const years = result.records.map(r => r.get('year'));
+                
+                console.log(`Anni trovati nella timeline:`, years);
+                
+                if (years.length === 0) {
+                    container.innerHTML = '<div class="w-full text-center text-gray-400 py-4">Nessun dato disponibile per la timeline.</div>';
+                    return;
+                }
+                
+                container.innerHTML = years.map(year => `
+                    <div class="timeline-year-btn" onclick="selectYear('${year}', this)">
+                        <span class="timeline-year-text">${year}</span>
+                        <div class="timeline-year-bar"></div>
+                    </div>
+                `).join('');
+                
+                lucide.createIcons();
+                
+                console.log(`Timeline caricata: ${years.length} anni trovati`);
+                
+                // Auto-scroll alla data più recente (a sinistra)
+                setTimeout(() => {
+                    if (container.scrollWidth > container.clientWidth) {
+                        container.scrollLeft = 0;
+                    }
+                }, 100);
+                
+            } catch (e) {
+                console.error("Errore nel caricamento degli anni:", e);
+                container.innerHTML = `<div class="w-full text-center py-4">
+                    <span class="text-red-500 text-sm">Errore: ${e.message}</span>
+                </div>`;
+            } finally { 
+                await session.close(); 
+            }
+        }
+
+        // Seleziona un anno e carica le produzioni
+        function selectYear(year, btnElement) {
+            console.log(`Selezionato anno: ${year}`);
+            
+            // Aggiorna stato
+            currentState.selectedYear = year;
+            
+            // Aggiorna UI timeline
+            document.querySelectorAll('.timeline-year-btn').forEach(el => el.classList.remove('active'));
+            if (btnElement) btnElement.classList.add('active');
+            
+            // Aggiorna display anno selezionato
+            document.getElementById('selected-year-display').textContent = `Anno selezionato: ${year}`;
+            
+            // Carica le produzioni
+            loadProductionsForYear(year);
+        }
+
+        // ==================== FUNZIONI PER I FILTRI (TOGGLE) ====================
+
+        // ==================== FUNZIONI PER I FILTRI (TOGGLE) ====================
+
+function toggleSourceFilter(filterType) {
+    const filterNoneBtn = document.getElementById('filter-none');
+    const filterRegioBtn = document.getElementById('filter-regio');
+    const filterFondazioneBtn = document.getElementById('filter-fondazione');
+    
+    // DEBUG: Log dello stato corrente
+    console.log(`Toggle filtro: ${filterType}`);
+    console.log(`Anno selezionato: ${currentState.selectedYear}`);
+    console.log(`Filtri prima del toggle: ${JSON.stringify(currentState.activeFilters)}`);
+    
+    if (filterType === 'none') {
+        // Se clicco "Tutte le fonti", deseleziona tutto
+        currentState.activeFilters = [];
+        filterNoneBtn.classList.add('active');
+        filterRegioBtn.classList.remove('active');
+        filterFondazioneBtn.classList.remove('active');
+    } else {
+        // Se clicco su un filtro specifico
+        filterNoneBtn.classList.remove('active');
+        
+        // Toggle del filtro
+        const index = currentState.activeFilters.indexOf(filterType);
+        if (index === -1) {
+            // Aggiungi filtro
+            currentState.activeFilters.push(filterType);
+        } else {
+            // Rimuovi filtro
+            currentState.activeFilters.splice(index, 1);
+        }
+        
+        // Aggiorna stato pulsanti
+        filterRegioBtn.classList.toggle('active', currentState.activeFilters.includes('Regio'));
+        filterFondazioneBtn.classList.toggle('active', currentState.activeFilters.includes('Fondazione'));
+        
+        // Se non ci sono filtri attivi, attiva "Tutte le fonti"
+        if (currentState.activeFilters.length === 0) {
+            filterNoneBtn.classList.add('active');
+        }
+    }
+    
+    // DEBUG: Log dello stato dopo il toggle
+    console.log(`Filtri dopo il toggle: ${JSON.stringify(currentState.activeFilters)}`);
+    console.log(`Filtro "Tutte le fonti" attivo: ${filterNoneBtn.classList.contains('active')}`);
+    
+    // FORZA il ricaricamento se c'è un anno selezionato
+    if (currentState.selectedYear) {
+        console.log(`Ricarico produzioni per anno ${currentState.selectedYear} con filtri: ${JSON.stringify(currentState.activeFilters)}`);
+        
+        // Mostra stato di caricamento
+        showLoadingState();
+        
+        // Piccolo delay per garantire che l'UI si aggiorni
+        setTimeout(() => {
+            loadProductionsForYear(currentState.selectedYear);
+        }, 100);
+    } else {
+        console.log("Nessun anno selezionato, nessun ricaricamento necessario");
+    }
+}
+
+        function updateFilterLabel() {
+            const labelElement = document.getElementById('current-filter-label');
+            const filterCount = currentState.activeFilters.length;
+            
+            if (filterCount === 0) {
+                labelElement.textContent = 'Tutte le fonti';
+            } else if (filterCount === 1) {
+                labelElement.textContent = currentState.activeFilters[0];
+            } else if (filterCount === 2) {
+                labelElement.textContent = 'Regio e Fondazione';
+            }
+        }
+
+        // ==================== FUNZIONE PER APRIRE ENTITY.HTML ====================
+
+        // LOGICA DASHBOARD2: Funzione per aprire entity.html direttamente
+        async function openEntityPage(nodeId) {
+            if (!driver || !nodeId) {
+                console.error("Driver non connesso o ID non valido");
+                return;
+            }
+            
+            const session = driver.session();
+            try {
+                // PRIMA: Recupera il nodo per ottenere gli identificatori (come in dashboard2)
+                const nodeQuery = `
+                    MATCH (n) WHERE id(n) = $id
+                    OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+                    RETURN n, idNode.code as id_code
+                `;
+                
+                const nodeResult = await session.run(nodeQuery, { id: neo4j.int(nodeId) });
+                
+                if (nodeResult.records.length === 0) {
+                    alert("Entità non trovata nel database");
+                    return;
+                }
+
+                const rec = nodeResult.records[0];
+                const n = rec.get('n');
+                const idCode = rec.get('id_code'); // Codice ID dal nodo ID collegato
+                
+                // Usa la logica di dashboard2 per generare il link corretto
+                const props = n.properties;
+                const nodeType = n.labels[0];
+                
+                // Costruisci URL secondo la logica di dashboard2
+                let params = [];
+                
+                if (idCode) {
+                    // Priorità 1: codice ID (come in dashboard2)
+                    params.push(`id=${encodeURIComponent(idCode)}`);
+                } else if (props.wikidata_qid) {
+                    // Priorità 2: QID di Wikidata (come in dashboard2)
+                    params.push(`qid=${encodeURIComponent(props.wikidata_qid)}`);
+                } else {
+                    // Priorità 3: nome/titolo con tipo (come in dashboard2)
+                    const paramName = props.name ? 'name' : (props.title ? 'title' : 'label');
+                    const paramValue = props.name || props.title || props.label || `Nodo #${nodeId}`;
+                    
+                    params.push(`${paramName}=${encodeURIComponent(paramValue)}`);
+                    if (nodeType) {
+                        params.push(`type=${nodeType.toLowerCase()}`);
+                    }
+                }
+                
+                // Costruisci URL assoluto per evitare problemi di path
+                const currentPath = window.location.pathname;
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                const entityUrl = `${window.location.origin}${basePath}entity.html?${params.join('&')}`;
+                
+                console.log(`Apertura entity page: ${entityUrl}`);
+                
+                // Apri in nuova scheda
+                window.open(entityUrl, '_blank');
+                
+            } catch (e) {
+                console.error("Errore nell'apertura della pagina:", e);
+                alert("Errore: " + e.message);
+            } finally {
+                await session.close();
+            }
+        }
+
+        // ==================== FUNZIONI PER LE PRODUZIONI ====================
+
+        // Versione corretta della parte di gestione filtri in loadProductionsForYear()
+async function loadProductionsForYear(year) {
+    if (!driver) {
+        alert("Connettiti al database prima di caricare le produzioni.");
+        return;
+    }
+    
+    showLoadingState();
+    let session;
+    
+    try {
+        session = driver.session();
+        
+        let sourceConditions = [];
+        let queryParams = { year: year };
+        
+        // DEBUG: Log dei filtri attivi
+        console.log(`[loadProductionsForYear] Anno: ${year}, Filtri attivi: ${JSON.stringify(currentState.activeFilters)}`);
+        
+        // Gestione dei filtri
+        if (currentState.activeFilters.length > 0) {
+            // Se ci sono filtri specifici
+            const filterConditions = currentState.activeFilters.map(filter => {
+                return `(p.source CONTAINS '${filter}')`;
+            });
+            sourceConditions = filterConditions;
+        }
+        
+        const sourceFilterCondition = sourceConditions.length > 0 
+            ? `AND (${sourceConditions.join(' OR ')})`
+            : '';
+        
+        console.log(`[loadProductionsForYear] Condizione filtro: ${sourceFilterCondition}`);
+        
+        // Resto della query...
+        const query = `
+            MATCH (p:Production)
+            WHERE EXISTS {
+              MATCH (p)-[:HAS_PERFORMANCE]->(perf:Performance)
+              WHERE perf.date STARTS WITH $year
+            }
+            ${sourceFilterCondition}
+
+            OPTIONAL MATCH (p)-[:RELATED_TO_WORK]->(w:Work)
+            OPTIONAL MATCH (w)-[:HAS_COMPOSER]->(comp:Person)
+            
+            OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(p)
+
+            CALL {
+                WITH p
+                OPTIONAL MATCH (dir_node:Person)-[rel:DIRECTED|HAD_ROLE_IN]->(p)
+                WHERE type(rel) = 'DIRECTED' 
+                   OR toLower(COALESCE(rel.role, '')) CONTAINS 'regista' 
+                   OR toLower(COALESCE(rel.role, '')) CONTAINS 'regia'
+                RETURN head(collect(dir_node.name)) as director_name
+            }
+
+            RETURN DISTINCT p, 
+                   id(p) as productionId,
+                   idNode.code as id_code,
+                   w.title AS work_title, 
+                   comp.name AS composer_name,
+                   director_name,
+                   p.source as source,
+                   p.dcDescription as description
+            ORDER BY COALESCE(w.title, p.title) ASC
+        `;
+        
+        console.log(`[loadProductionsForYear] Query eseguita con parametri:`, queryParams);
+        const result = await session.run(query, queryParams);
+        
+        console.log(`[loadProductionsForYear] Risultati trovati: ${result.records.length}`);
+        
+        if (result.records.length === 0) {
+            showNoResultsState();
+            return;
+        }
+  
+        
+        // Mapping dei risultati nell'oggetto di stato
+        currentState.currentProductions = result.records.map(rec => {
+            const p = rec.get('p').properties;
+            const productionId = rec.get('productionId');
+            const id = productionId ? (typeof productionId.low !== 'undefined' ? productionId.low : productionId) : -1;
+            
+            return {
+                id: id,
+                id_code: rec.get('id_code'),
+                properties: p,
+                workTitle: rec.get('work_title') || p.title || "Produzione senza titolo",
+                // Usa gli alias definiti nella query RETURN
+                composer: rec.get('composer_name') || "Compositore non specificato",
+                director: rec.get('director_name') || "Regista non specificato",
+                source: rec.get('source') || "Archivio",
+                description: rec.get('description') || p.description || `Produzione del ${year}.`
+            };
+        });
+        
+        renderProductions(currentState.currentProductions);
+        
+    } catch (e) {
+        console.error("Errore:", e);
+        showErrorState("Errore nel caricamento: " + e.message);
+    } finally { 
+        if (session) await session.close(); 
+    }
+}
+
+        function renderProductions(productions) {
+            // Nascondi tutti gli stati
+            hideAllStates();
+            
+            // Aggiorna conteggio
+            document.getElementById('productions-count').textContent = productions.length;
+            
+            // Ottieni il container della lista
+            const listContainer = document.getElementById('productions-list');
+            listContainer.innerHTML = '';
+            listContainer.classList.remove('hidden');
+            
+            // Se non ci sono produzioni, mostra stato nessun risultato
+            if (productions.length === 0) {
+                showNoResultsState();
+                return;
+            }
+            
+            // Raggruppa per stagione (se possibile)
+            const groupedProductions = groupProductionsBySeason(productions);
+            
+            console.log("Produzioni raggruppate per stagione:", Object.keys(groupedProductions).length, "gruppi");
+            
+            // Per ogni gruppo (stagione), crea un elemento
+            Object.entries(groupedProductions).forEach(([seasonName, seasonProductions]) => {
+                // Se c'è una stagione definita, crea un header per la stagione
+                if (seasonName !== 'other') {
+                    const seasonElement = createSeasonHeader(seasonName, seasonProductions);
+                    listContainer.appendChild(seasonElement);
+                }
+                
+                // Per ogni produzione nella stagione, crea un elemento
+                seasonProductions.forEach(prod => {
+                    const listItem = createProductionListItem(prod, seasonName !== 'other');
+                    listContainer.appendChild(listItem);
+                });
+            });
+            
+            // Aggiorna le icone
+            lucide.createIcons();
+        }
+
+        // Funzione per raggruppare le produzioni per stagione
+        function groupProductionsBySeason(productions) {
+            const groups = {
+                'other': []
+            };
+            
+            productions.forEach(prod => {
+                const title = prod.workTitle.toLowerCase();
+                
+                // Cerca pattern di stagione nel titolo
+                if (title.includes('stagione') || title.includes('season')) {
+                    // Estrai il nome della stagione
+                    const seasonMatch = title.match(/(stagione|season)[\s:]*([^,]+)/i);
+                    if (seasonMatch && seasonMatch[2]) {
+                        const seasonName = seasonMatch[2].trim();
+                        if (!groups[seasonName]) {
+                            groups[seasonName] = [];
+                        }
+                        groups[seasonName].push(prod);
+                        return;
+                    }
+                }
+                
+                // Altrimenti, metti nel gruppo "other"
+                groups['other'].push(prod);
+            });
+            
+            return groups;
+        }
+
+        // Crea l'header per una stagione
+        function createSeasonHeader(seasonName, productions) {
+            const seasonDiv = document.createElement('div');
+            seasonDiv.className = 'productions-list-item season-header';
+            
+            const productionCount = productions.length;
+            
+            seasonDiv.innerHTML = `
+                <div class="productions-list-header">
+                    <div>
+                        <h3 class="productions-list-title" onclick="event.stopPropagation();">${seasonName}</h3>
+                        <p class="productions-list-subtitle">${productionCount} produzione${productionCount !== 1 ? 'i' : ''}</p>
+                    </div>
+                    <div class="productions-list-toggle" onclick="event.stopPropagation(); toggleSeason(this)">
+                        <i data-lucide="chevron-down" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="productions-list-content">
+                    <div class="productions-list-details">
+                        <p class="productions-list-description">Stagione con ${productionCount} produzione${productionCount !== 1 ? 'i' : ''}. Seleziona una produzione per vedere i dettagli.</p>
+                    </div>
+                </div>
+            `;
+            
+            // Aggiungi evento click alla stagione
+            const titleElement = seasonDiv.querySelector('.productions-list-title');
+            titleElement.onclick = null; // Non fare nulla quando si clicca sul titolo della stagione
+            
+            return seasonDiv;
+        }
+
+        // Funzione per toggle della stagione
+        function toggleSeason(toggleElement) {
+            const listItem = toggleElement.closest('.productions-list-item');
+            listItem.classList.toggle('expanded');
+            const icon = listItem.querySelector('i[data-lucide="chevron-down"]');
+            if (listItem.classList.contains('expanded')) {
+                icon.setAttribute('data-lucide', 'chevron-up');
+            } else {
+                icon.setAttribute('data-lucide', 'chevron-down');
+            }
+            lucide.createIcons();
+        }
+
+        // Crea un elemento della lista per una produzione
+        function createProductionListItem(production, isPartOfSeason = false) {
+    const listItem = document.createElement('div');
+    listItem.className = 'productions-list-item';
+    
+    // Determina se questa produzione ha abbastanza dati per essere espandibile
+    const hasDetails = production.description && production.description.length > 10;
+    
+    if (!hasDetails) {
+        listItem.classList.add('minimal');
+    }
+    
+    // Formatta compositore + regista (fallback solo UI)
+    const composer = production.composer || "Compositore non specificato";
+    const director = production.director || "Regista non specificato";
+    
+    // Assicurati che l'ID sia valido per openEntityPage
+    const isValidId = production.id && production.id !== -1;
+    
+    listItem.innerHTML = `
+        <div class="productions-list-header">
+            <div class="flex-1">
+                ${isValidId ? 
+                    `<h3 class="productions-list-title" onclick="openEntityPage(${production.id})">${production.workTitle}</h3>` :
+                    `<h3 class="productions-list-title">${production.workTitle}</h3>`
+                }
+                <p class="productions-list-subtitle">
+                    ${composer} • ${director} • ${currentState.selectedYear}
+                </p>
+            </div>
+            ${hasDetails ? `
+            <div class="productions-list-toggle" onclick="event.stopPropagation(); toggleProduction(this)">
+                <i data-lucide="chevron-down" class="w-5 h-5"></i>
+            </div>
+            ` : ''}
+        </div>
+        ${hasDetails ? `
+        <div class="productions-list-content">
+            <div class="productions-list-details">
+                <p class="productions-list-description">${production.description}</p>
+                
+                <div class="productions-list-meta">
+                    <div class="productions-list-meta-item">
+                        <i data-lucide="folder" class="w-3 h-3"></i>
+                        <span>Fonte: ${production.source || "Archivio"}</span>
+                    </div>
+
+                    <div class="productions-list-meta-item">
+                        <i data-lucide="video" class="w-3 h-3"></i>
+                        <span>Regia: ${director}</span>
+                    </div>
+
+                    <!-- RIMOSSO: Anno (già nel sottotitolo) -->
+                </div>
+                
+                <div class="productions-list-actions">
+                    <div class="productions-list-meta-item">
+                        <i data-lucide="hash" class="w-3 h-3"></i>
+                        <span>ID: ${production.id_code || "N/A"} • Neo4j: ${production.id || "N/A"}</span>
+                    </div>
+                    ${isValidId ? `
+                    <button 
+                        onclick="openEntityPage(${production.id})"
+                        class="px-3 py-1 bg-[var(--primary-color)] hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                    >
+                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                        Vedi scheda completa
+                    </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+    `;
+    
+    return listItem;
+}
+
+
+        // Funzione per toggle della produzione
+        function toggleProduction(toggleElement) {
+            const listItem = toggleElement.closest('.productions-list-item');
+            listItem.classList.toggle('expanded');
+            const icon = listItem.querySelector('i[data-lucide="chevron-down"]');
+            if (listItem.classList.contains('expanded')) {
+                icon.setAttribute('data-lucide', 'chevron-up');
+            } else {
+                icon.setAttribute('data-lucide', 'chevron-down');
+            }
+            lucide.createIcons();
+        }
+
+        // ==================== GESTIONE DEGLI STATI DELLA UI ====================
+
+        function showLoadingState() {
+            hideAllStates();
+            document.getElementById('loading-state').classList.remove('hidden');
+        }
+
+        function showNoResultsState() {
+            hideAllStates();
+            document.getElementById('no-results-state').classList.remove('hidden');
+        }
+
+        function showErrorState(message) {
+            hideAllStates();
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bg-red-50 border border-red-200 rounded-xl p-6 text-center';
+            errorDiv.innerHTML = `
+                <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-4 text-red-500"></i>
+                <h3 class="text-lg font-medium text-red-700 mb-2">Errore</h3>
+                <p class="text-red-600">${message}</p>
+            `;
+            document.getElementById('productions-container').appendChild(errorDiv);
+            lucide.createIcons();
+        }
+
+        function showInitialState() {
+            hideAllStates();
+            document.getElementById('initial-state').classList.remove('hidden');
+        }
+
+        function hideAllStates() {
+            document.getElementById('initial-state').classList.add('hidden');
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('productions-list').classList.add('hidden');
+            document.getElementById('no-results-state').classList.add('hidden');
+            
+            // Rimuovi eventuali messaggi di errore
+            const errorDivs = document.querySelectorAll('#productions-container > .bg-red-50');
+            errorDivs.forEach(div => div.remove());
+        }
+
+        // Inizializzazione
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mostra stato iniziale
+            showInitialState();
+            
+            // Verifica se c'è un utente già loggato
+            const u = sessionStorage.getItem('neo4j_user');
+            const p = sessionStorage.getItem('neo4j_pass');
+            
+            if (u && p) {
+                // Se l'utente è già loggato, connettiti automaticamente
+                console.log("Utente già loggato, connessione automatica...");
+                connectToDB(u, p);
+            }
+        });
+
+    </script>
+</body>
+</html>

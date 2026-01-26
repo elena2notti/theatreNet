@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queries</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Neo4j Javascript Driver -->
+    <script src="https://unpkg.com/neo4j-driver"></script>
+    
+    <!-- D3.js (Necessario per le forze di collisione) -->
+    <script src="https://unpkg.com/d3"></script>
+
+    <!-- 2D Force Graph -->
+    <script src="https://unpkg.com/force-graph"></script>
+    
+    <!-- Font e Icone -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --primary-color: #cf171c;
+            --secondary-color: #1a171a;
+            --accent-purple: #4a3b5c;
+            --code-bg: #1e1e1e;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--secondary-color);
+            background-color: #f8f9fa;
+        }
+
+        .typog-hero { font-family: 'Playfair Display', serif; font-size: 3rem; line-height: 1.1; font-weight: 600; }
+        .typog-header2 { font-family: 'Playfair Display', serif; font-size: 2rem; line-height: 1.2; font-weight: 500; }
+        
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-online { background-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .status-offline { background-color: #ef4444; }
+
+        .modal { transition: opacity 0.3s ease-in-out; opacity: 0; pointer-events: none; z-index: 1000; }
+        .modal.open { opacity: 1; pointer-events: auto; }
+
+        /* Contenitore unico per i risultati */
+        #result-container {
+            width: 100%;
+            height: 550px;
+            background-color: #ffffff;
+            border-radius: 0 0 1rem 1rem;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #graph-view { flex-grow: 1; width: 100%; height: 100%; display: none; }
+        #table-view { flex-grow: 1; width: 100%; overflow: auto; display: none; }
+
+        /* Stili Tabella Compatti */
+        .result-table th, .result-table td {
+            white-space: nowrap; 
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        textarea.query-editor {
+            font-family: 'Fira Code', monospace;
+            background-color: transparent;
+            color: #e5e7eb;
+            width: 100%;
+            height: 100%;
+            resize: none;
+            outline: none;
+            border: none;
+            line-height: 1.6;
+            font-size: 0.85rem;
+        }
+
+        #expansion-loader {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: none;
+            z-index: 100;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Detail Modal Styles */
+        .detail-modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .clickable-meta {
+            cursor: pointer;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .clickable-meta:hover {
+            color: #a00f14;
+            text-decoration: underline;
+        }
+
+        /* Person details specific styles - COPIATO DAL SECONDO FILE */
+        .person-detail-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .person-detail-item:last-child {
+            border-bottom: none;
+        }
+        .person-detail-icon {
+            color: var(--primary-color);
+            flex-shrink: 0;
+            margin-top: 0.125rem;
+        }
+        .person-detail-content {
+            flex-grow: 1;
+        }
+        .person-detail-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .person-detail-value {
+            font-size: 0.875rem;
+            color: #1f2937;
+            font-weight: 500;
+        }
+        .person-detail-subvalue {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.125rem;
+        }
+
+        /* Stili per i campi dei dettagli */
+        .detail-field {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+        .detail-field:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .detail-field-icon {
+            color: var(--primary-color);
+            flex-shrink: 0;
+        }
+        .detail-field-content {
+            flex-grow: 1;
+        }
+        .detail-field-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+        .detail-field-value {
+            font-size: 0.875rem;
+            color: #1f2937;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .detail-field-subvalue {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.125rem;
+            line-height: 1.3;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="modal fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 border border-gray-200">
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="database" class="w-6 h-6 text-[var(--primary-color)]"></i>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900">Connessione Neo4j</h2>
+                <p class="text-sm text-gray-500 mt-1">Inserisci le credenziali dal file <code>env.env</code></p>
+            </div>
+            <form id="db-login-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Neo4j URI</label>
+                    <input type="text" id="input-uri" value="bolt://archiuidev.promemoriagroup.com:7687" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono" readonly>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">User (ID)</label>
+                    <input type="text" id="input-user" placeholder="neo4j" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password (SECRET_KEY)</label>
+                    <input type="password" id="input-password" placeholder="••••••••" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div id="login-error" class="text-red-500 text-xs text-center hidden font-bold"></div>
+                <button type="submit" class="w-full px-4 py-2 bg-[var(--primary-color)] text-white rounded-lg hover:bg-red-700 text-sm font-medium shadow-lg shadow-red-500/30">Connetti</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- DETAIL MODAL CON PULSANTE PER APRIRE ENTITY.HTML -->
+    <div id="detail-modal" class="modal fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl border border-gray-200 detail-modal-content relative">
+            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10 bg-white rounded-full p-1"><i data-lucide="x" class="w-6 h-6"></i></button>
+            <button onclick="goBackDetail()" id="modal-back-btn" class="absolute top-4 left-4 text-gray-400 hover:text-gray-600 z-10 bg-white rounded-full p-1 hidden flex items-center gap-1 text-xs font-bold uppercase"><i data-lucide="arrow-left" class="w-4 h-4"></i> Indietro</button>
+            
+            <div id="detail-content" class="flex flex-col md:flex-row min-h-[500px]">
+                <div class="w-full h-full flex items-center justify-center text-gray-400">
+                    <i data-lucide="loader" class="w-8 h-8 animate-spin"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="container mx-auto px-6 py-5 flex items-center justify-between sticky inset-x-0 top-0 bg-white/95 backdrop-blur-sm z-50 border-b border-gray-100 shadow-sm">
+        <a href="index.html" class="flex items-center gap-3">
+            <svg class="h-8 w-auto text-[var(--primary-color)]" viewBox="0 0 50 50" fill="currentColor">
+                <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
+                <path d="M22 15h6v20h-6z"/>
+            </svg>
+            <span class="font-semibold text-lg tracking-tight hidden sm:block">NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span></span>
+        </a>
+        <div class="flex items-center gap-6">
+            <div id="db-status-badge" class="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer" onclick="openLoginModal()">
+                <span id="db-indicator" class="status-dot status-offline"></span>
+                <span id="db-text" class="text-[10px] font-mono text-gray-500 font-bold uppercase">Not Connected</span>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium">
+                <a href="index.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Home</a>
+                <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+                <a href="timeline.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Timeline</a>
+                <a href="#" class="text-[var(--primary-color)] font-bold">Queries</a>
+                <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pb-24">
+
+        <!-- HERO -->
+        <section class="bg-[#1a171a] text-white py-20 relative overflow-hidden">
+            <div class="container mx-auto px-6 relative z-10 flex flex-col md:flex-row items-center gap-12">
+                <div class="md:w-1/2">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 mb-6 border border-white/20 rounded-full bg-white/5 text-gray-300 text-xs font-mono tracking-wide uppercase backdrop-blur-md">
+                        <i data-lucide="database" class="w-3 h-3 text-[var(--primary-color)]"></i>
+                        Live Query Interface
+                    </div>
+                    <h1 class="typog-hero mb-6">Interroga il Grafo</h1>
+                    <p class="text-gray-400 text-lg leading-relaxed max-w-xl">
+                        Esplorazione interattiva. Seleziona una query o naviga la timeline.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- AREA DI LAVORO -->
+        <section class="container mx-auto px-6 py-12 -mt-10 relative z-20">
+
+<!-- SEARCH BAR (NUOVA) -->
+            <div class="mb-8 w-full max-w-4xl mx-auto relative z-30">
+                <div class="flex shadow-xl rounded-full overflow-hidden border border-gray-200 bg-white items-center">
+                    <div class="pl-6 pr-2 flex items-center justify-center bg-white">
+                        <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+                    </div>
+                    <input type="text" id="fulltext-search" placeholder="Cerca nel Grafo (es. 'Rossini', 'Traviata', 'Pavarotti')..." 
+                           class="w-full py-4 px-2 outline-none text-gray-700 placeholder-gray-400" 
+                           onkeydown="if(event.key === 'Enter') performFulltextSearch()">
+                    <button onclick="performFulltextSearch()" class="h-full bg-[var(--primary-color)] hover:bg-red-700 text-white px-8 font-bold uppercase text-sm transition-colors py-4">
+                        Cerca
+                    </button>
+                </div>
+            </div>
+
+            <!-- GRIGLIA 12 COLONNE: 4 per Editor, 8 per Risultati -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start h-full">
+                
+                <!-- COLONNA SINISTRA: Query Editor (4/12) -->
+                <div class="lg:col-span-4 flex flex-col h-[550px]">
+                    <div class="bg-[#2d2d2d] px-4 py-3 rounded-t-xl flex justify-between items-center border-b border-gray-700">
+                        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Editor Cypher</span>
+                        <button onclick="copyQuery()" class="text-gray-400 hover:text-white transition flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-white/10" id="btn-copy">
+                            <i data-lucide="copy" class="w-3 h-3"></i> Copia
+                        </button>
+                    </div>
+                    
+                    <div class="bg-[#1e1e1e] flex-grow relative border-x border-gray-800">
+                        <textarea id="cypher-input" class="query-editor p-4" spellcheck="false">
+MATCH (luciano:Person) WHERE luciano.name CONTAINS 'Pavarotti'
+
+// Trova le recite
+MATCH (luciano)-[r1:PERFORMED_IN]->(perf:Performance)
+
+// Trova l'Opera
+MATCH (perf)-[r2:RELATED_TO_WORK]->(w:Work)
+
+// Trova il Direttore d'Orchestra
+OPTIONAL MATCH (direttore:Person)-[r3:CONDUCTED]->(perf)
+
+// IMPORTANTE: Restituisci le relazioni per disegnarle!
+RETURN luciano, r1, perf, r2, w, direttore, r3
+LIMIT 50
+</textarea>
+                    </div>
+
+                    <div class="bg-[#252526] p-4 rounded-b-xl border-t border-gray-700">
+                        <button id="run-query-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold uppercase transition-all shadow-lg flex items-center justify-center gap-2">
+                            <i data-lucide="play" class="w-4 h-4"></i> Esegui Query
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Result Container -->
+                <div class="lg:col-span-8">
+                    <div class="bg-white border border-gray-200 rounded-t-xl border-b-0 px-6 py-3 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="monitor" class="w-4 h-4 text-gray-500"></i>
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Output</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <span id="view-mode-badge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-500">Idle</span>
+                            <span id="query-time" class="text-xs font-mono text-gray-400"></span>
+                        </div>
+                    </div>
+                    
+                    <div id="result-container">
+                        <!-- Message View (per zero risultati / errori) -->
+                        <div id="message-view" class="w-full h-full hidden">
+                        <div class="w-full h-full flex flex-col items-center justify-center text-gray-400 px-6 text-center">
+                            <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-20"></i>
+                            <p id="message-text" class="text-sm"></p>
+                        </div>
+                        </div>
+
+                        <!-- Placeholder -->
+                        <div id="placeholder-view" class="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                            <i data-lucide="terminal" class="w-12 h-12 mb-4 opacity-20"></i>
+                            <p class="text-sm">In attesa di input...</p>
+                        </div>
+
+                        <!-- Table View -->
+                        <div id="table-view" class="w-full h-full bg-white hidden">
+                            <table class="w-full text-sm text-left border-collapse result-table">
+                                <thead class="bg-gray-50 text-gray-500 font-semibold sticky top-0 shadow-sm z-10" id="results-head"></thead>
+                                <tbody id="results-body" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Graph View -->
+                        <div id="graph-view" class="hidden relative bg-gray-50">
+                            <div id="expansion-loader">Espansione in corso... <i data-lucide="loader" class="w-3 h-3 animate-spin inline ml-2"></i></div>
+                            <div id="graph-canvas" class="w-full h-full"></div>
+                             <!-- Info Panel Overlay -->
+                            <div id="node-info-overlay" class="absolute top-4 right-4 w-64 bg-white/95 backdrop-blur border border-gray-200 p-4 rounded-lg shadow-xl hidden text-sm max-h-[400px] overflow-y-auto">
+                                <h4 class="font-bold text-gray-900 border-b pb-2 mb-2 flex justify-between items-center">
+                                    Dettagli Nodo
+                                    <button onclick="document.getElementById('node-info-overlay').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+                                </h4>
+                                <div id="node-info-content"></div>
+                                <button onclick="openEntityPageForCurrentNode()" id="view-full-detail-btn" class="w-full mt-4 bg-[var(--primary-color)] hover:bg-red-700 text-white py-1.5 rounded text-xs font-bold uppercase transition-colors flex items-center justify-center gap-2">
+                                    <i data-lucide="external-link" class="w-3 h-3"></i> Scheda Completa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEZIONE VUOTA (per eventuali future funzionalità) -->
+        <section class="container mx-auto px-6 py-12">
+            <!-- Puoi aggiungere qui altre funzionalità in futuro -->
+        </section>
+
+    </main>
+
+    <footer class="border-t border-gray-200 py-10">
+  <div class="container mx-auto px-6 text-center space-y-3">
+
+    <div class="text-xs uppercase tracking-widest text-gray-500">
+      NeoTheatre Knowledge Graph
+    </div>
+
+    <div class="text-sm text-gray-600">
+      Progetto di tesi (LM DHDK 2026)
+    </div>
+
+    <div class="pt-4 text-xs text-gray-400">
+      © Elena Binotti
+    </div>
+
+  </div>
+</footer>
+
+
+    <!-- LOGICA JAVASCRIPT CON LOGICA DASHBOARD2 -->
+    <script>
+        lucide.createIcons();
+
+        let driver;
+        const NEO4J_URI = 'bolt://archiuidev.promemoriagroup.com:7687';
+        
+        let Graph = null; 
+        let currentGraphData = { nodes: [], links: [] }; 
+        let selectedNodeIdForModal = null; 
+        let navigationHistory = [];
+
+        window.addEventListener('load', () => {
+            const u = sessionStorage.getItem('neo4j_user');
+            const p = sessionStorage.getItem('neo4j_pass');
+            if (u && p) connectToDB(u, p);
+            else openLoginModal();
+        });
+
+        function openLoginModal() { document.getElementById('login-modal').classList.add('open'); }
+        function closeLoginModal() { document.getElementById('login-modal').classList.remove('open'); }
+
+        document.getElementById('db-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            connectToDB(
+                document.getElementById('input-user').value,
+                document.getElementById('input-password').value
+            );
+        });
+
+        async function connectToDB(user, pass) {
+            const errDiv = document.getElementById('login-error');
+            errDiv.classList.add('hidden');
+            
+            try {
+                driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(user, pass));
+                await driver.verifyConnectivity();
+                
+                sessionStorage.setItem('neo4j_user', user);
+                sessionStorage.setItem('neo4j_pass', pass);
+                closeLoginModal();
+                
+                document.getElementById('db-indicator').className = 'status-dot status-online';
+                document.getElementById('db-text').textContent = 'CONNECTED';
+                document.getElementById('db-status-badge').classList.add('bg-green-50', 'text-green-700', 'border-green-200');
+                
+            } catch (err) {
+                console.error(err);
+                errDiv.textContent = "Errore: " + err.message;
+                errDiv.classList.remove('hidden');
+                if (!document.getElementById('login-modal').classList.contains('open')) openLoginModal();
+            }
+        }
+
+
+        // --- FULLTEXT SEARCH ---
+        async function performFulltextSearch() {
+             if (!driver) { alert("Connettiti al DB."); return; }
+             const term = document.getElementById('fulltext-search').value;
+             if (!term || term.length < 2) return;
+
+             const start = performance.now();
+             const session = driver.session();
+             
+            // Reset UI per Search
+            resetOutputViews();
+
+            document.getElementById('view-mode-badge').className =
+              'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-700';
+            document.getElementById('view-mode-badge').textContent = 'Searching...';
+
+             try {
+                // Query Ibrida migliorata: cerca in tutti i tipi di nodo con CONTAINS
+                const cypher = `
+                    CALL {
+        MATCH (n:Person) WHERE toLower(n.name) CONTAINS toLower($term) 
+        OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+        RETURN n, 
+               idNode.code as id_code, 
+               n.wikidata_qid as qid, 
+               'Person' as type,
+               COALESCE(n.name, n.full_name, '') as sort_name,
+               n.internal_id_regio as regio_id,
+               n.internal_id_fondazione as fond_id
+        UNION
+        MATCH (n:Work) WHERE toLower(n.title) CONTAINS toLower($term) 
+        OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+        RETURN n, 
+               idNode.code as id_code, 
+               n.wikidata_qid as qid, 
+               'Work' as type,
+               COALESCE(n.title, '') as sort_name,
+               null as regio_id,
+               null as fond_id
+        UNION
+        MATCH (n:Production) WHERE toLower(n.title) CONTAINS toLower($term) 
+        OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+        RETURN n, 
+               idNode.code as id_code, 
+               n.wikidata_qid as qid, 
+               'Production' as type,
+               COALESCE(n.title, '') as sort_name,
+               null as regio_id,
+               null as fond_id
+        UNION
+        MATCH (n:Performance) WHERE toLower(n.title) CONTAINS toLower($term) 
+        OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+        RETURN n, 
+               idNode.code as id_code, 
+               n.wikidata_qid as qid, 
+               'Performance' as type,
+               COALESCE(n.title, '') as sort_name,
+               null as regio_id,
+               null as fond_id
+        UNION
+        MATCH (n:Season) WHERE toLower(n.title) CONTAINS toLower($term) 
+        OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+        RETURN n, 
+               idNode.code as id_code, 
+               n.wikidata_qid as qid, 
+               'Season' as type,
+               COALESCE(n.title, '') as sort_name,
+               null as regio_id,
+               null as fond_id
+    }
+    WITH n, id_code, qid, type, sort_name, regio_id, fond_id
+    // Raggruppa per nome e QID per evitare duplicati ovvi
+    WITH COLLECT({n: n, id_code: id_code, qid: qid, type: type, sort_name: sort_name, regio_id: regio_id, fond_id: fond_id}) as all_results
+    UNWIND all_results as result
+    WITH result
+    // Ordina dando priorità a quelli con QID, poi con ID, poi per nome
+    ORDER BY 
+        CASE WHEN result.qid IS NOT NULL THEN 0 ELSE 1 END,
+        CASE WHEN result.id_code IS NOT NULL THEN 0 ELSE 1 END,
+        result.sort_name
+    RETURN result.n as n, result.id_code as id_code, result.qid as qid, result.type as type
+    LIMIT 100
+`;
+                
+                const result = await session.run(cypher, { term: term });
+                const end = performance.now();
+                document.getElementById('query-time').textContent = `${(end - start).toFixed(0)}ms`;
+
+                if (result.records.length === 0) {
+                showMessage(`Nessun risultato per "${term}". Prova con un nome, un titolo o una parola più corta.`);
+                return;
+                }
+
+                renderSearchListResult(result);
+
+             } catch (e) {
+                 console.error("Search error", e);
+                    showMessage("Errore durante la ricerca. Controlla la connessione o riprova.");
+             } finally {
+                 await session.close();
+             }
+        }
+
+        function renderSearchListResult(result) {
+            document.getElementById('message-view').classList.add('hidden');
+
+            // Mostriamo una lista dentro TABLE-VIEW (così riusi il contenitore già pronto)
+            const table = document.getElementById('table-view');
+            const thead = document.getElementById('results-head');
+            const tbody = document.getElementById('results-body');
+
+            // UI state (importante: rimuovere "hidden" di Tailwind)
+            document.getElementById('placeholder-view').style.display = 'none';
+
+            const graphView = document.getElementById('graph-view');
+            const tableView = document.getElementById('table-view');
+
+            graphView.style.display = 'none';
+            graphView.classList.add('hidden');
+
+            tableView.style.display = 'block';
+            tableView.classList.remove('hidden');
+
+            // Header semplice (lista = tabella minimale)
+            thead.innerHTML = `
+                <tr>
+                <th class="py-3 px-4 bg-gray-50 text-gray-500 font-semibold text-left border-b border-gray-200">Tipo</th>
+                <th class="py-3 px-4 bg-gray-50 text-gray-500 font-semibold text-left border-b border-gray-200">Nome / Titolo</th>
+                <th class="py-3 px-4 bg-gray-50 text-gray-500 font-semibold text-left border-b border-gray-200">Azioni</th>
+                </tr>
+            `;
+
+            // Righe - VERSIONE CORRETTA
+            tbody.innerHTML = result.records.map(rec => {
+                const n = rec.get('n');
+                const idCode = rec.get('id_code');
+                const qid = rec.get('qid');
+                const type = rec.get('type') || (n.labels?.[0] || 'Entity');
+
+                const label = n.properties.name ||
+                             n.properties.title ||
+                             n.properties.full_name ||
+                             n.properties.label ||
+                             'Nodo';
+
+                // Costruisci l'URL usando la LOGICA DI entity.html
+                let entityUrl = 'entity.html?';
+                
+                // Priorità 1: codice ID (regio_XXX o fondazione_XXX)
+                if (idCode) {
+                    entityUrl += `id=${encodeURIComponent(idCode)}`;
+                }
+                // Priorità 2: Wikidata QID
+                else if (qid) {
+                    entityUrl += `qid=${encodeURIComponent(qid)}`;
+                }
+                // Priorità 3: nome/titolo con tipo
+                else {
+                    const paramName = n.properties.name ? 'name' : 
+                                    (n.properties.title ? 'title' : 
+                                    (n.properties.full_name ? 'full_name' : 'label'));
+                    const paramValue = n.properties.name || 
+                                     n.properties.title || 
+                                     n.properties.full_name || 
+                                     n.properties.label || 
+                                     label;
+                    
+                    entityUrl += `${paramName}=${encodeURIComponent(paramValue)}`;
+                    
+                    // Aggiungi il tipo per aiutare la ricerca
+                    if (type) {
+                        entityUrl += `&type=${encodeURIComponent(type.toLowerCase())}`;
+                    }
+                }
+
+                // Aggiungi anche altri identificatori utili se disponibili
+                if (n.properties.internal_id_regio) {
+                    entityUrl += `&internal_id=${encodeURIComponent(n.properties.internal_id_regio)}`;
+                } else if (n.properties.internal_id_fondazione) {
+                    entityUrl += `&internal_id=${encodeURIComponent(n.properties.internal_id_fondazione)}`;
+                }
+
+                return `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="py-3 px-4 border-b border-gray-100 text-gray-700 font-mono text-xs">
+                            <span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase rounded">
+                                ${escapeHtml(type)}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 border-b border-gray-100 text-gray-900 font-medium">
+                            <div class="font-medium">${escapeHtml(label)}</div>
+                            ${idCode ? `<div class="text-xs text-gray-400 font-mono mt-1">${escapeHtml(idCode)}</div>` : ''}
+                            ${qid ? `<div class="text-xs text-gray-500 mt-1">Wikidata: ${escapeHtml(qid)}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4 border-b border-gray-100">
+                            <a class="text-xs font-bold uppercase text-[var(--primary-color)] hover:underline inline-flex items-center gap-1"
+                               href="${entityUrl}" target="_blank" rel="noopener">
+                                <i data-lucide="external-link" class="w-3 h-3"></i>
+                                Apri scheda
+                            </a>
+                            <button onclick="openNodeDetail(${n.identity.low})" 
+                                    class="text-xs font-bold uppercase text-gray-600 hover:text-gray-900 hover:underline ml-3 inline-flex items-center gap-1">
+                                <i data-lucide="eye" class="w-3 h-3"></i>
+                                Anteprima
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Aggiungi un messaggio se ci sono molti risultati
+            if (result.records.length >= 100) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td colspan="3" class="py-3 px-4 text-center text-gray-500 text-sm italic">
+                            Mostrati i primi 100 risultati. Usa termini più specifici per risultati più precisi.
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            // Aggiorna il badge
+            document.getElementById('view-mode-badge').className =
+                'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-green-100 text-green-600';
+            document.getElementById('view-mode-badge').textContent = `Risultati (${result.records.length})`;
+            
+            // Ricrea le icone
+            lucide.createIcons();
+        }
+
+        // mini helper per evitare HTML rotto se il titolo contiene caratteri strani
+        function escapeHtml(str) {
+            return String(str)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        // --- GESTIONE MODALE DETTAGLIO CON LOGICA DASHBOARD2 ---
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.remove('open');
+            navigationHistory = []; 
+        }
+
+        function goBackDetail() {
+            if (navigationHistory.length > 1) {
+                navigationHistory.pop(); 
+                const prevId = navigationHistory.pop(); 
+                openNodeDetail(prevId, true); 
+            }
+        }
+
+        // LOGICA PRINCIPALE: Apri entity.html secondo la logica di dashboard2
+        async function openEntityPage(nodeId) {
+            if (!driver || !nodeId) {
+                console.error("Driver non connesso o ID non valido");
+                return;
+            }
+            
+            const session = driver.session();
+            try {
+                // PRIMA: Recupera il nodo per ottenere gli identificatori (come in dashboard2)
+                const nodeQuery = `
+                    MATCH (n) WHERE id(n) = $id
+                    OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+                    RETURN n, idNode.code as id_code
+                `;
+                
+                const nodeResult = await session.run(nodeQuery, { id: neo4j.int(nodeId) });
+                
+                if (nodeResult.records.length === 0) {
+                    alert("Entità non trovata nel database");
+                    return;
+                }
+
+                const rec = nodeResult.records[0];
+                const n = rec.get('n');
+                const idCode = rec.get('id_code'); // Codice ID dal nodo ID collegato
+                
+                // Usa la logica di dashboard2 per generare il link corretto
+                const props = n.properties;
+                const nodeType = n.labels[0];
+                
+                // Costruisci URL secondo la logica di dashboard2
+                let entityUrl = 'entity.html?';
+                
+                if (idCode) {
+                    // Priorità 1: codice ID (come in dashboard2)
+                    entityUrl += `id=${encodeURIComponent(idCode)}`;
+                } else if (props.wikidata_qid) {
+                    // Priorità 2: QID di Wikidata (come in dashboard2)
+                    entityUrl += `qid=${encodeURIComponent(props.wikidata_qid)}`;
+                } else {
+                    // Priorità 3: nome/titolo con tipo (come in dashboard2)
+                    const paramName = props.name ? 'name' : (props.title ? 'title' : 'label');
+                    const paramValue = props.name || props.title || props.label || `Nodo #${nodeId}`;
+                    
+                    entityUrl += `${paramName}=${encodeURIComponent(paramValue)}`;
+                    if (nodeType) {
+                        entityUrl += `&type=${nodeType.toLowerCase()}`;
+                    }
+                }
+                
+                // Apri in nuova scheda
+                window.open(entityUrl, '_blank');
+                
+            } catch (e) {
+                console.error("Errore nell'apertura della pagina:", e);
+                alert("Errore: " + e.message);
+            } finally {
+                await session.close();
+            }
+        }
+
+        // Funzione per aprire entity.html dal pulsante nell'overlay del grafo
+        function openEntityPageForCurrentNode() {
+            if (selectedNodeIdForModal) {
+                openEntityPage(selectedNodeIdForModal);
+            }
+        }
+
+        // Funzione per aprire la modale di dettaglio (mantenuta per compatibilità)
+        async function openNodeDetail(nodeId = null, isBackNav = false) {
+            const idToLoad = nodeId || selectedNodeIdForModal;
+            if (!idToLoad || !driver) return;
+
+            if (!isBackNav) navigationHistory.push(idToLoad);
+            
+            const backBtn = document.getElementById('modal-back-btn');
+            if (navigationHistory.length > 1) {
+                backBtn.classList.remove('hidden');
+                backBtn.classList.add('flex');
+            } else {
+                backBtn.classList.add('hidden');
+                backBtn.classList.remove('flex');
+            }
+
+            const modal = document.getElementById('detail-modal');
+            const content = document.getElementById('detail-content');
+            modal.classList.add('open');
+            content.innerHTML = `<div class="w-full h-full flex items-center justify-center text-gray-400 py-20"><i data-lucide="loader" class="w-8 h-8 animate-spin"></i></div>`;
+            lucide.createIcons();
+
+            const session = driver.session();
+            try {
+                // Query per ottenere anche il codice ID (come in dashboard2)
+                const nodeQuery = `
+                    MATCH (n) WHERE id(n) = $id
+                    OPTIONAL MATCH (idNode:ID)-[:IS_ID_OF]->(n)
+                    RETURN n, idNode.code as id_code
+                `;
+                
+                const nodeResult = await session.run(nodeQuery, { id: neo4j.int(idToLoad) });
+                
+                if (nodeResult.records.length === 0) {
+                    content.innerHTML = `<p class="p-8 text-center">Nessun dato trovato.</p>`;
+                    return;
+                }
+
+                const rec = nodeResult.records[0];
+                const n = rec.get('n');
+                const idCode = rec.get('id_code');
+                const props = n.properties;
+                
+                const name = props.name || props.title || props.label || `Nodo #${idToLoad}`;
+                const type = n.labels[0];
+                const bio = props.dcDescription || props.occupation || props.description || "Nessuna descrizione disponibile.";
+                const dates = (props.birth_date || props.from || props.date) ? 
+                    `${(props.birth_date || props.from || props.date || '').split('T')[0]} ${props.death_date || props.to ? '- ' + (props.death_date || props.to || '').split('T')[0] : ''}` : '';
+                
+                let imgSrc = "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?auto=format&fit=crop&w=500&q=60";
+                if(type === 'Person') imgSrc = "https://images.unsplash.com/photo-1522075469751-3a3694c60e9e?auto=format&fit=crop&w=500&q=60";
+                if(type === 'Work' || type === 'Production') imgSrc = "https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?auto=format&fit=crop&w=500&q=60";
+
+                // Ora recupera le relazioni per mostrare un'anteprima
+                const relationsQuery = `
+                    MATCH (n) WHERE id(n) = $id
+                    OPTIONAL MATCH (n)-[r:INTERPRETED|APPEARED_IN|PERFORMED_IN|CONDUCTED|DIRECTED|CHOREOGRAPHED|DESIGNED_SET|RELATED_TO_WORK|HAS_PERFORMANCE|IS_PART_OF|IS_COMPOSER|IS_LIBRETTIST]-(m)
+                    WHERE NOT m:ID
+                    RETURN n, collect({
+                        rel: type(r), 
+                        node: m, 
+                        dir: startNode(r) = n, 
+                        id: id(m),
+                        props: properties(m)
+                    }) as connections
+                    LIMIT 30
+                `;
+                
+                const result = await session.run(relationsQuery, { id: neo4j.int(idToLoad) });
+                
+                const connections = result.records[0] ? result.records[0].get('connections') : [];
+
+                const groupedConns = {};
+                connections.forEach(c => {
+                    if(!c.node) return;
+                    const relType = c.rel;
+                    if(!groupedConns[relType]) groupedConns[relType] = [];
+                    c.node.id = c.id.low; 
+                    c.node.props = c.props;
+                    groupedConns[relType].push(c.node);
+                });
+
+                // Ordina le connessioni per data (se disponibile)
+                for (const rtype in groupedConns) {
+                    groupedConns[rtype].sort((a, b) => {
+                        const da = a.props.date || a.props.from || "0";
+                        const db = b.props.date || b.props.from || "0";
+                        return db.localeCompare(da); 
+                    });
+                }
+
+                let connHtml = '';
+                for (const [rtype, nodes] of Object.entries(groupedConns)) {
+                    connHtml += `
+                        <div class="mb-6">
+                            <h4 class="font-bold text-gray-900 text-sm uppercase tracking-wider mb-3 border-b pb-1 border-gray-100">${rtype.replace(/_/g, ' ')}</h4>
+                            <ul class="space-y-2">
+                                ${nodes.slice(0, 10).map(node => `
+                                    <li onclick="openEntityPage(${node.id})" class="text-sm text-gray-600 hover:text-[var(--primary-color)] transition-colors cursor-pointer flex items-center gap-2 clickable-meta">
+                                        <i data-lucide="chevron-right" class="w-3 h-3 text-gray-300"></i>
+                                        <span class="font-medium">${node.props.name || node.props.title || 'Entità'}</span>
+                                        ${node.props.date ? `<span class="text-xs text-gray-400 ml-auto font-mono">${node.props.date.split('T')[0]}</span>` : ''}
+                                    </li>
+                                `).join('')}
+                                ${nodes.length > 10 ? `<li class="text-xs text-gray-400 italic pl-5">+ altri ${nodes.length - 10} elementi</li>` : ''}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                // Genera URL per entity.html usando la logica di dashboard2
+                let entityUrl = 'entity.html?';
+                if (idCode) {
+                    entityUrl += `id=${encodeURIComponent(idCode)}`;
+                } else if (props.wikidata_qid) {
+                    entityUrl += `qid=${encodeURIComponent(props.wikidata_qid)}`;
+                } else {
+                    const paramName = props.name ? 'name' : (props.title ? 'title' : 'label');
+                    const paramValue = props.name || props.title || props.label || name;
+                    entityUrl += `${paramName}=${encodeURIComponent(paramValue)}`;
+                    if (type) {
+                        entityUrl += `&type=${type.toLowerCase()}`;
+                    }
+                }
+
+                // Costruisci il contenuto della modale con PULSANTE PER ENTITY.HTML
+                content.innerHTML = `
+                    <div class="w-full md:w-1/3 bg-gray-50 border-r border-gray-100 p-8 flex flex-col items-center md:items-start">
+                        <div class="w-40 h-40 rounded-full overflow-hidden mb-6 border-4 border-white shadow-lg">
+                            <img src="${imgSrc}" class="w-full h-full object-cover">
+                        </div>
+                        <span class="inline-block px-2 py-1 bg-[var(--primary-color)] text-white text-[10px] font-bold uppercase rounded mb-3">${type}</span>
+                        <h2 class="text-3xl font-serif font-bold text-gray-900 mb-2 leading-tight text-center md:text-left">${name}</h2>
+                        ${dates ? `<p class="text-sm text-gray-500 font-mono mb-6 border-b border-gray-200 pb-4 w-full">${dates}</p>` : ''}
+                        
+                        <!-- Descrizione principale -->
+                        <div class="prose prose-sm text-gray-600 w-full max-w-none mb-6">
+                            <p>${bio}</p>
+                        </div>
+                        
+                        <!-- Bottone per aprire la pagina completa entity.html -->
+                        <div class="mt-auto pt-6 border-t border-gray-200 w-full">
+                            <a href="${entityUrl}" target="_blank" class="inline-flex items-center justify-center gap-2 text-sm font-medium bg-[var(--primary-color)] hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors w-full shadow-lg shadow-red-500/30">
+                                <i data-lucide="external-link" class="w-4 h-4"></i>
+                                Apri scheda completa
+                            </a>
+                            <p class="text-xs text-gray-500 mt-3 text-center">
+                                Verrai reindirizzato alla pagina di dettaglio completa per questa entità
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="w-full md:w-2/3 p-8 overflow-y-auto max-h-[80vh] bg-white">
+                        <h3 class="font-serif text-xl mb-8 text-gray-800 border-b border-gray-200 pb-2">Connessioni & Relazioni</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            ${connHtml || '<p class="text-gray-500 italic col-span-2">Nessuna relazione rilevante registrata.</p>'}
+                        </div>
+                        
+                        <!-- Metadati aggiuntivi -->
+                        <div class="mt-12 pt-6 border-t border-gray-200">
+                            <h4 class="font-bold text-gray-900 text-sm uppercase tracking-wider mb-4">Identificatori</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                                <div class="bg-gray-50 p-3 rounded-lg">
+                                    <div class="text-gray-500 font-medium">ID Nodo Neo4j</div>
+                                    <div class="font-mono text-gray-900">${idToLoad}</div>
+                                </div>
+                                ${idCode ? `
+                                <div class="bg-gray-50 p-3 rounded-lg">
+                                    <div class="text-gray-500 font-medium">Codice ID Database</div>
+                                    <div class="font-mono text-gray-900">${idCode}</div>
+                                </div>
+                                ` : ''}
+                                ${props.wikidata_qid ? `
+                                <div class="bg-gray-50 p-3 rounded-lg">
+                                    <div class="text-gray-500 font-medium">Wikidata QID</div>
+                                    <div class="font-mono text-gray-900">${props.wikidata_qid}</div>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                lucide.createIcons();
+
+            } catch (e) {
+                console.error("Errore nel caricamento dei dettagli:", e);
+                content.innerHTML = `<div class="p-8 text-red-500">Errore: ${e.message}</div>`;
+            } finally {
+                await session.close();
+            }
+        }
+
+        document.getElementById('run-query-btn').addEventListener('click', async () => {
+            if (!driver) { alert("Connettiti al DB prima."); return; }
+            const query = document.getElementById('cypher-input').value;
+            const start = performance.now();
+            const session = driver.session();
+            resetOutputViews();
+            document.getElementById('placeholder-view').style.display = 'none';
+            document.getElementById('table-view').style.display = 'none';
+            document.getElementById('graph-view').style.display = 'none';
+            document.getElementById('view-mode-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-100 text-yellow-600';
+            document.getElementById('view-mode-badge').textContent = 'Running...';
+            try {
+                const result = await session.run(query);
+                const end = performance.now();
+                document.getElementById('query-time').textContent = `${(end - start).toFixed(0)}ms`;
+                if (result.records.length === 0) {
+                showMessage("La query non ha restituito risultati. Prova a ridurre i filtri o aumentare LIMIT.");
+                return;
+                }
+                const firstRecord = result.records[0];
+                const containsGraphElements = firstRecord.keys.some(key => {
+                    const val = firstRecord.get(key);
+                    return val && (val.labels || val.type);
+                });
+                if (containsGraphElements) renderGraphResult(result);
+                else renderTableResult(result);
+                } catch (e) {
+                console.error(e);
+                showMessage("Errore Query: " + e.message);
+                }
+        });
+
+        function renderTableResult(result) {
+        resetOutputViews();
+
+        const table = document.getElementById('table-view');
+        const thead = document.getElementById('results-head');
+        const tbody = document.getElementById('results-body');
+
+        table.style.display = 'block';
+        table.classList.remove('hidden');
+
+        document.getElementById('view-mode-badge').className =
+            'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-blue-600';
+        document.getElementById('view-mode-badge').textContent = 'Table Mode';
+
+        const keys = result.records[0].keys;
+        thead.innerHTML = `<tr>${keys.map(k =>
+            `<th class="py-3 px-4 bg-gray-50 text-gray-500 font-semibold text-left border-b border-gray-200">${k}</th>`
+        ).join('')}</tr>`;
+
+        tbody.innerHTML = result.records.map(rec => {
+            const cells = keys.map(k => {
+            const val = rec.get(k);
+            let displayVal = val;
+            if (val && val.low !== undefined && val.high !== undefined) displayVal = val.low;
+            else if (Array.isArray(val)) displayVal = val.join(', ');
+            else if (val === null) displayVal = '<span class="text-gray-300">-</span>';
+            return `<td class="py-3 px-4 border-b border-gray-100 text-gray-700 font-medium">${displayVal}</td>`;
+            }).join('');
+            return `<tr class="hover:bg-gray-50 transition-colors">${cells}</tr>`;
+        }).join('');
+        }
+
+
+        function renderGraphResult(result) {
+        resetOutputViews();
+
+        const graphDiv = document.getElementById('graph-view');
+        graphDiv.style.display = 'block';
+        graphDiv.classList.remove('hidden');
+
+        document.getElementById('view-mode-badge').className =
+            'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 text-purple-600';
+        document.getElementById('view-mode-badge').textContent = 'Graph Mode';
+
+        const nodesMap = new Map();
+        const links = [];
+
+        result.records.forEach(rec => {
+            rec.keys.forEach(key => {
+            const item = rec.get(key);
+            if (!item) return;
+
+            if (item.labels) {
+                const id = item.identity.low;
+                if (!nodesMap.has(id)) {
+                nodesMap.set(id, {
+                    id,
+                    labels: item.labels,
+                    properties: item.properties,
+                    color: getColorForLabel(item.labels[0]),
+                    name: item.properties.name || item.properties.title || item.properties.label || `Node ${id}`
+                });
+                }
+            } else if (item.type && item.start && item.end) {
+                links.push({
+                source: item.start.low,
+                target: item.end.low,
+                type: item.type,
+                properties: item.properties
+                });
+            }
+            });
+        });
+
+        currentGraphData.nodes = Array.from(nodesMap.values());
+        currentGraphData.links = links;
+
+        initGraphInstance(currentGraphData);
+        }
+
+
+        function initGraphInstance(data) {
+            const container = document.getElementById('graph-canvas');
+            container.innerHTML = ''; 
+            Graph = ForceGraph()(container)
+                .graphData(data)
+                .nodeLabel('name')
+                .nodeCanvasObject((node, ctx, globalScale) => {
+                    const label = node.name || node.id.toString();
+                    const maxLen = 15;
+                    const displayLabel = label.length > maxLen ? label.substring(0, maxLen) + '...' : label;
+                    const fontSize = 12 / globalScale;
+                    ctx.font = `${fontSize}px Sans-Serif`;
+                    const textWidth = ctx.measureText(displayLabel).width;
+                    const padding = fontSize * 0.8;
+                    let radius = (textWidth / 2) + padding;
+                    if (radius < 10) radius = 10;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = node.color;
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5 / globalScale;
+                    ctx.stroke();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(displayLabel, node.x, node.y);
+                    node.__radius = radius;
+                })
+                .nodePointerAreaPaint((node, color, ctx) => {
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, node.__radius || 5, 0, 2 * Math.PI, false);
+                    ctx.fill();
+                })
+                .onNodeDragEnd(node => { node.fx = node.x; node.fy = node.y; })
+                .linkLabel('type')
+                .linkDirectionalArrowLength(3.5)
+                .linkDirectionalArrowRelPos(1)
+                .linkCanvasObjectMode(() => 'after')
+                .linkCanvasObject((link, ctx, globalScale) => {
+                    const start = link.source;
+                    const end = link.target;
+                    if (typeof start !== 'object' || typeof end !== 'object') return;
+                    const textPos = Object.assign(...['x', 'y'].map(c => ({ [c]: start[c] + (end[c] - start[c]) / 2 })));
+                    const relLink = { x: end.x - start.x, y: end.y - start.y };
+                    let textAngle = Math.atan2(relLink.y, relLink.x);
+                    if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
+                    if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+                    const label = link.type;
+                    const fontSize = 10 / globalScale; 
+                    ctx.font = `${fontSize}px Sans-Serif`; 
+                    ctx.save();
+                    ctx.translate(textPos.x, textPos.y);
+                    ctx.rotate(textAngle);
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const textWidth = ctx.measureText(label).width;
+                    const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    ctx.fillRect(-bckgDimensions[0] / 2, -bckgDimensions[1] / 2, ...bckgDimensions);
+                    ctx.fillStyle = '#000';
+                    ctx.fillText(label, 0, 0);
+                    ctx.restore();
+                })
+                .d3Force('charge', d3.forceManyBody().strength(-800))
+                .d3Force('collide', d3.forceCollide().radius(d => (d.__radius || 10) + 10).iterations(2))
+                .d3Force('link', d3.forceLink().distance(200).id(d => d.id))
+                .d3Force('center', d3.forceCenter(container.clientWidth / 2, container.clientHeight / 2))
+                .warmupTicks(100)
+                .d3AlphaDecay(0.01)
+                .nodeColor('color')
+                .backgroundColor('#f9fafb')
+                .width(container.clientWidth)
+                .height(container.clientHeight)
+                .onNodeClick(node => {
+                    selectedNodeIdForModal = node.id;
+                    const overlay = document.getElementById('node-info-overlay');
+                    const content = document.getElementById('node-info-content');
+                    const cleanProps = Object.entries(node.properties)
+                        .filter(([k, v]) => k !== 'embedding' && !k.includes('vector'))
+                        .map(([k, v]) => `<div class="mb-1"><strong class="text-xs text-gray-500 uppercase">${k}:</strong> <span class="text-gray-800">${v}</span></div>`)
+                        .join('');
+                    content.innerHTML = `<div class="mb-3"><span class="inline-block px-2 py-1 rounded text-xs font-bold text-white" style="background:${node.color}">${node.labels.join(', ')}</span><h3 class="font-bold text-lg mt-1">${node.name}</h3></div>${cleanProps}`;
+                    overlay.classList.remove('hidden');
+                    expandNode(node.id);
+                    Graph.centerAt(node.x, node.y, 1000);
+                    Graph.zoom(1.5, 2000);
+                });
+            setTimeout(() => { Graph.zoomToFit(400, 20); }, 1000);
+        }
+
+        async function expandNode(nodeId) {
+             if (!driver) return;
+             const feedback = document.getElementById('expansion-loader');
+             feedback.style.display = 'block';
+             feedback.innerHTML = `Caricamento nodi vicini... <i data-lucide="loader" class="w-3 h-3 animate-spin inline ml-2"></i>`;
+             lucide.createIcons();
+            const session = driver.session();
+            try {
+                const cypher = `MATCH (n)-[r]-(m) WHERE id(n) = $id RETURN m, r LIMIT 50`;
+                const result = await session.run(cypher, { id: neo4j.int(nodeId) });
+                if (result.records.length === 0) {
+                     feedback.innerHTML = `<span class="text-yellow-400">Nessun altro nodo collegato</span>`;
+                     setTimeout(() => feedback.style.display = 'none', 2000);
+                    return;
+                }
+                const existingNodeIds = new Set(currentGraphData.nodes.map(n => n.id));
+                const existingLinkKeys = new Set(currentGraphData.links.map(l => {
+                    const s = typeof l.source === 'object' ? l.source.id : l.source;
+                    const t = typeof l.target === 'object' ? l.target.id : l.target;
+                    return `${s}-${t}-${l.type}`;
+                }));
+                let newNodes = 0;
+                result.records.forEach(rec => {
+                    const m = rec.get('m');
+                    const r = rec.get('r');
+                    if (!existingNodeIds.has(m.identity.low)) {
+                        currentGraphData.nodes.push({ id: m.identity.low, labels: m.labels, properties: m.properties, color: getColorForLabel(m.labels[0]), name: m.properties.name || m.properties.title || `Node ${m.identity.low}` });
+                        existingNodeIds.add(m.identity.low);
+                        newNodes++;
+                    }
+                    const sourceId = r.start.low;
+                    const targetId = r.end.low;
+                    const linkKey = `${sourceId}-${targetId}-${r.type}`;
+                    if (!existingLinkKeys.has(linkKey)) {
+                        currentGraphData.links.push({ source: sourceId, target: targetId, type: r.type, properties: r.properties });
+                         existingLinkKeys.add(linkKey);
+                    }
+                });
+                Graph.graphData(currentGraphData);
+                feedback.innerHTML = `<i data-lucide="check" class="w-3 h-3 inline"></i> Espanso: +${newNodes} nodi`;
+                lucide.createIcons();
+                setTimeout(() => feedback.style.display = 'none', 1500);
+            } catch (e) {
+                console.error("Expand Error", e);
+                feedback.textContent = "Errore espansione";
+            } finally { await session.close(); }
+        }
+
+        function getColorForLabel(label) {
+            const colors = { 'Person': '#cf171c', 'Production': '#d97706', 'Work': '#4a3b5c', 'Performance': '#10b981', 'Character': '#3b82f6', 'Place': '#6b7280' };
+            return colors[label] || '#9ca3af';
+        }
+
+        function copyQuery() {
+            const queryText = document.getElementById('cypher-input').value;
+            const btn = document.getElementById('btn-copy');
+            const originalHTML = btn.innerHTML;
+            navigator.clipboard.writeText(queryText).then(() => {
+                btn.innerHTML = `<i data-lucide="check" class="w-3 h-3"></i> Copiato!`;
+                lucide.createIcons();
+                setTimeout(() => btn.innerHTML = originalHTML, 2000);
+            });
+        }
+
+        function resetOutputViews() {
+        // placeholder
+        const placeholder = document.getElementById('placeholder-view');
+        if (placeholder) placeholder.style.display = 'none';
+
+        // message
+        const messageView = document.getElementById('message-view');
+        if (messageView) messageView.classList.add('hidden');
+
+        // table
+        const tableView = document.getElementById('table-view');
+        tableView.style.display = 'none';
+        tableView.classList.add('hidden');
+
+        // graph
+        const graphView = document.getElementById('graph-view');
+        graphView.style.display = 'none';
+        graphView.classList.add('hidden');
+        }
+
+        function showMessage(text) {
+        // nascondi tutto
+
+        document.getElementById('results-head').innerHTML = '';
+        document.getElementById('results-body').innerHTML = '';
+
+        document.getElementById('placeholder-view').style.display = 'none';
+
+        const tableView = document.getElementById('table-view');
+        const graphView = document.getElementById('graph-view');
+        const messageView = document.getElementById('message-view');
+
+        tableView.style.display = 'none';
+        tableView.classList.add('hidden');
+
+        graphView.style.display = 'none';
+        graphView.classList.add('hidden');
+
+        // mostra message view
+        document.getElementById('message-text').textContent = text;
+        messageView.classList.remove('hidden');
+
+        lucide.createIcons();
+
+        // badge
+        document.getElementById('view-mode-badge').className =
+            'px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600';
+        document.getElementById('view-mode-badge').textContent = 'No results';
+        }
+
+    </script>
+</body>
+</html>

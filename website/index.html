@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeoTheatre | Knowledge Graph</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font e Icone -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --primary-color: #cf171c; /* Rosso */
+      --secondary-color: #1a171a;
+      --accent-purple: #4a3b5c;
+      --gray-border: #e5e7eb;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--secondary-color);
+      overflow-x: hidden;
+      background: #ffffff;
+    }
+
+    .typog-hero {
+      font-family: 'Playfair Display', serif;
+      font-size: 3.5rem;
+      line-height: 1.05;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .typog-header2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.25rem;
+      line-height: 1.2;
+      font-weight: 500;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      transition: all 0.25s ease;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+      gap: 0.5rem;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+      box-shadow: 0 12px 30px rgba(207, 23, 28, 0.25);
+    }
+    .btn-primary:hover { background-color: #a80f14; transform: translateY(-1px); }
+
+    .btn-outline {
+      border: 1px solid var(--secondary-color);
+      color: var(--secondary-color);
+      background: transparent;
+    }
+    .btn-outline:hover { background: var(--secondary-color); color: white; transform: translateY(-1px); }
+
+    @media (max-width: 768px) {
+      .typog-hero { font-size: 2.5rem; }
+      .typog-header2 { font-size: 1.75rem; }
+    }
+  </style>
+</head>
+
+<body class="antialiased">
+
+  <!-- HEADER (coerente con le altre pagine) -->
+  <header class="container mx-auto px-6 py-5 flex items-center justify-between sticky inset-x-0 top-0 bg-white/95 backdrop-blur-sm z-50 border-b border-gray-100 shadow-sm">
+    <a href="index.html" class="flex items-center gap-3">
+      <svg class="h-8 w-auto text-[var(--primary-color)]" viewBox="0 0 50 50" fill="currentColor">
+        <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
+        <path d="M22 15h6v20h-6z"/>
+      </svg>
+      <span class="font-semibold text-lg tracking-tight hidden sm:block">
+        NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span>
+      </span>
+    </a>
+
+    <nav class="hidden md:flex gap-6 text-sm font-medium">
+      <a href="index.html" class="text-[var(--primary-color)] font-bold">Home</a>
+      <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+      <a href="timeline.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Timeline</a>
+      <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
+      <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
+    </nav>
+  </header>
+
+  <main class="pb-32 space-y-20 lg:space-y-32">
+
+    <!-- HERO -->
+    <section class="mt-16 lg:mt-28 container mx-auto px-6 min-h-[60vh] flex flex-col justify-center">
+      <div class="max-w-4xl">
+        <div class="inline-flex items-center gap-2 px-3 py-1 mb-6 border border-gray-200 rounded-full bg-gray-50 text-gray-600 text-xs font-mono tracking-wide uppercase">
+          <i data-lucide="sparkles" class="w-3 h-3 text-[var(--primary-color)]"></i>
+          Teatro Regio + Fondazione I Teatri
+        </div>
+
+        <h1 class="typog-hero mb-6">
+          Un Knowledge Graph<br>
+          per raccontare i teatri, con i dati
+        </h1>
+
+        <p class="text-gray-600 mb-10 max-w-2xl leading-relaxed text-lg">
+          Persone, ruoli, opere, produzioni e recite: tutto collegato in un unico grafo interrogabile.
+          Entra nell’archivio, segui le relazioni, e scopri pattern che nei cataloghi restano invisibili.
+        </p>
+
+        <div class="flex flex-wrap gap-4">
+          <a href="dashboard2.html" class="btn btn-primary">
+            <i data-lucide="network" class="w-4 h-4"></i>
+            Esplora le visualizzazioni
+          </a>
+          <a href="#project" class="btn btn-outline">
+            <i data-lucide="info" class="w-4 h-4"></i>
+            Scopri il progetto
+          </a>
+        </div>
+
+        <div class="mt-10 flex flex-wrap gap-3 text-xs text-gray-500">
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
+            <span class="w-2 h-2 rounded-full bg-green-500"></span> Neo4j
+          </span>
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
+            <span class="w-2 h-2 rounded-full bg-blue-500"></span> Cypher
+          </span>
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
+            <span class="w-2 h-2 rounded-full bg-yellow-500"></span> UI BOOOOOOOOO
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENTRY POINTS -->
+    <section id="esplora" class="container mx-auto px-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- Card 1 (ora cliccabile) -->
+        <a href="queries.html" class="group relative overflow-hidden rounded-xl border border-gray-200 bg-white hover:shadow-2xl transition-all duration-500 cursor-pointer h-[400px]">
+          <div class="absolute inset-0 bg-gray-100 group-hover:scale-105 transition-transform duration-700">
+            <img src="https://images.unsplash.com/photo-1507838153414-b4b713384ebd?auto=format&fit=crop&w=1200&q=80"
+                 class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" alt="Archivio">
+          </div>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 p-8 text-white">
+            <div class="mb-4 p-3 bg-white/20 backdrop-blur-md rounded-lg w-fit">
+              <i data-lucide="library" class="w-6 h-6 text-white"></i>
+            </div>
+            <h3 class="typog-header2 text-2xl mb-2">Esplora l’Archivio</h3>
+            <p class="text-white/80 mb-6 text-sm leading-relaxed">
+              Cerca persone e opere, apri schede collegate e attraversa le relazioni come in una mappa narrativa.
+            </p>
+            <span class="inline-flex items-center text-sm font-medium border-b border-white/50 pb-1 group-hover:border-white transition-colors">
+              Vai alle query <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+            </span>
+          </div>
+        </a>
+
+        <!-- Card 2 -->
+        <a href="dashboard2.html" class="group relative overflow-hidden rounded-xl border border-gray-200 bg-white hover:shadow-2xl transition-all duration-500 cursor-pointer h-[400px]">
+          <div class="absolute inset-0 bg-gray-100 group-hover:scale-105 transition-transform duration-700">
+            <img src=""
+                 class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" alt="Grafi">
+          </div>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 p-8 text-white">
+            <div class="mb-4 p-3 bg-white/20 backdrop-blur-md rounded-lg w-fit">
+              <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+            </div>
+            <h3 class="typog-header2 text-2xl mb-2">Visualizzazioni</h3>
+            <p class="text-white/80 mb-6 text-sm leading-relaxed">
+              Timeline, grafi e viste comparative per leggere trend, ricorrenze e connessioni tra teatri e periodi.
+            </p>
+            <span class="inline-flex items-center text-sm font-medium border-b border-white/50 pb-1 group-hover:border-white transition-colors">
+              Apri le visualizzazioni <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+            </span>
+          </div>
+        </a>
+
+        <!-- Card 3 -->
+        <a href="api.html" class="group relative overflow-hidden rounded-xl border border-gray-200 bg-white hover:shadow-2xl transition-all duration-500 cursor-pointer h-[400px]">
+          <div class="absolute inset-0 bg-gray-900 group-hover:scale-105 transition-transform duration-700">
+            <div class="w-full h-full opacity-30"
+                 style="background-image: radial-gradient(#4a5568 1px, transparent 1px); background-size: 20px 20px;"></div>
+          </div>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 p-8 text-white">
+            <div class="mb-4 p-3 bg-white/20 backdrop-blur-md rounded-lg w-fit">
+              <i data-lucide="terminal" class="w-6 h-6 text-white"></i>
+            </div>
+            <h3 class="typog-header2 text-2xl mb-2">API & Dati</h3>
+            <p class="text-white/80 mb-6 text-sm leading-relaxed">
+              Un accesso “da laboratorio”: endpoint, dataset e note sul modello per chi vuole riusare o verificare i dati.
+            </p>
+            <span class="inline-flex items-center text-sm font-medium border-b border-white/50 pb-1 group-hover:border-white transition-colors">
+              Accedi alla documentazione <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+            </span>
+          </div>
+        </a>
+
+      </div>
+    </section>
+
+    <!-- PROJECT (prima mancava) -->
+    <section id="project" class="container mx-auto px-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        <div class="lg:col-span-7">
+          <h2 class="typog-header2 mb-6">Di cosa si tratta</h2>
+          <p class="text-gray-600 leading-relaxed mb-6">
+            NeoTheatre integra e mette in relazione dati d’archivio (Teatro Regio e Fondazione I Teatri),
+            trasformandoli in un ambiente interrogabile: non solo “record”, ma connessioni.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-5 rounded-xl border border-gray-200 bg-white">
+              <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+                <i data-lucide="scan-search" class="w-4 h-4 text-[var(--primary-color)]"></i>
+                Esplorazione
+              </div>
+              <p class="text-gray-600 text-sm leading-relaxed">
+                Parti da una persona o un’opera e segui ruoli, produzioni e recite come un percorso narrativo.
+              </p>
+            </div>
+
+            <div class="p-5 rounded-xl border border-gray-200 bg-white">
+              <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+                <i data-lucide="git-merge" class="w-4 h-4 text-[var(--primary-color)]"></i>
+                Integrazione
+              </div>
+              <p class="text-gray-600 text-sm leading-relaxed">
+                Due archivi, un grafo: disambiguazione, allineamenti e collegamenti per confrontare repertori e reti.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="timeline.html" class="btn btn-outline">
+              <i data-lucide="history" class="w-4 h-4"></i> Vai alla Timeline
+            </a>
+            <a href="queries.html" class="btn btn-outline">
+              <i data-lucide="search" class="w-4 h-4"></i> Interroga il Grafo
+            </a>
+          </div>
+        </div>
+
+        <!-- NUMERI + preview -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="rounded-xl overflow-hidden border border-gray-200 shadow-xl bg-[#1a171a] p-1 relative">
+            <div class="p-6 text-white">
+              <div class="text-xs uppercase tracking-widest text-gray-300">Network Preview</div>
+              <div class="mt-2 text-sm text-gray-200">
+                Un assaggio della vista “nodo + relazioni” usata nelle pagine di esplorazione.
+              </div>
+
+              <div class="mt-6 grid grid-cols-2 gap-4">
+                <div class="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div class="text-3xl font-bold text-[var(--primary-color)] font-mono">38.907</div>
+                  <div class="text-xs uppercase tracking-wider text-gray-300 mt-1">Persone</div>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div class="text-3xl font-bold text-[var(--primary-color)] font-mono">7.900</div>
+                  <div class="text-xs uppercase tracking-wider text-gray-300 mt-1">Opere</div>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div class="text-3xl font-bold text-[var(--primary-color)] font-mono">4831</div>
+                  <div class="text-xs uppercase tracking-wider text-gray-300 mt-1">Produzioni</div>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div class="text-3xl font-bold text-[var(--primary-color)] font-mono">12k+</div>
+                  <div class="text-xs uppercase tracking-wider text-gray-300 mt-1">Recite</div>
+                </div>
+              </div>
+
+              <div class="mt-6 text-xs text-gray-400">
+                (Numeri indicativi: puoi agganciarli a query Neo4j quando vuoi.)
+              </div>
+            </div>
+          </div>
+
+         
+
+        </div>
+      </div>
+    </section>
+
+  <!-- METODO / COME FUNZIONA (senza box) -->
+<section class="container mx-auto px-6">
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+
+    <div class="lg:col-span-7">
+      <h2 class="typog-header2 mb-4">Come funziona (in pratica)</h2>
+      <p class="text-gray-600 leading-relaxed mb-6">
+        Qui non navighi “pagine isolate”, ma un grafo: ogni entità (persona, opera, produzione, recita)
+        è un nodo; i legami tra loro (ha diretto, ha interpretato, è collegato a…) sono relazioni.
+        Questo permette di passare dal catalogo alla rete: esplorare, confrontare e scoprire percorsi.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
+          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+            <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-[var(--primary-color)]"></i>
+            Navigazione
+          </div>
+          <p class="text-gray-600 text-sm leading-relaxed">
+            Parti da una scheda e “salti” tra entità collegate: persone ↔ ruoli ↔ produzioni ↔ opere.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
+          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+            <i data-lucide="filter" class="w-4 h-4 text-[var(--primary-color)]"></i>
+            Interrogazione
+          </div>
+          <p class="text-gray-600 text-sm leading-relaxed">
+            Le viste (timeline e dashboard) sono calcolate “on demand” con query Cypher su Neo4j.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
+          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+            <i data-lucide="git-branch" class="w-4 h-4 text-[var(--primary-color)]"></i>
+            Integrazione archivi
+          </div>
+          <p class="text-gray-600 text-sm leading-relaxed">
+            I dati provengono da due istituzioni: il valore è nella comparazione e nei collegamenti.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
+          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-[var(--primary-color)]"></i>
+            Trasparenza
+          </div>
+          <p class="text-gray-600 text-sm leading-relaxed">
+            Le query principali sono documentate e replicabili: puoi vedere “da dove esce” ogni vista.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="dashboard2.html" class="btn btn-primary">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Vai alle visualizzazioni
+        </a>
+        <a href="queries.html" class="btn btn-outline">
+          <i data-lucide="search" class="w-4 h-4"></i> Prova la ricerca
+        </a>
+      </div>
+    </div>
+
+    <div class="lg:col-span-5">
+      <div class="rounded-xl border border-gray-200 bg-[#0f0f10] p-6 text-white shadow-xl">
+        <div class="flex items-center justify-between">
+          <div class="text-xs uppercase tracking-widest text-gray-300">Esempio di query (Cypher)</div>
+          <a href="queries.html" class="text-xs font-bold uppercase text-[var(--primary-color)] hover:underline">
+            Apri Queries →
+          </a>
+        </div>
+
+        <pre class="mt-4 text-[11px] leading-relaxed text-gray-200 font-mono whitespace-pre-wrap">
+MATCH (p:Person)-[r:PERFORMED_IN|CONDUCTED|DIRECTED]->(pr:Production)
+MATCH (pr)-[:RELATED_TO_WORK]->(w:Work)
+RETURN p, r, pr, w
+ORDER BY rand()
+LIMIT 30</pre>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+
+  </main>
+<footer class="border-t border-gray-200 py-10">
+  <div class="container mx-auto px-6 text-center space-y-3">
+
+    <div class="text-xs uppercase tracking-widest text-gray-500">
+      NeoTheatre Knowledge Graph
+    </div>
+
+    <div class="text-sm text-gray-600">
+      Progetto di tesi (LM DHDK 2026)
+    </div>
+
+    <div class="pt-4 text-xs text-gray-400">
+      © Elena Binotti
+    </div>
+
+  </div>
+</footer>
