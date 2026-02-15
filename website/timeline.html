@@ -477,7 +477,7 @@
             <form id="db-login-form" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Neo4j URI</label>
-                    <input type="text" id="input-uri" value="neo4j+s://archiuidev.promemoriagroup.com:7687" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono" readonly>
+                    <input type="text" id="input-uri" value="bolt://archiuidev.promemoriagroup.com:7687" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono" readonly>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">User (ID)</label>
@@ -500,7 +500,7 @@
                 <path d="M25 0C11.19 0 0 11.19 0 25s11.19 25 25 25 25-11.19 25-25S38.81 0 25 0zm0 45C13.97 45 5 36.03 5 25S13.97 5 25 5s20 8.97 20 20-8.97 20-20 20z"/>
                 <path d="M22 15h6v20h-6z"/>
             </svg>
-            <span class="font-semibold text-lg tracking-tight hidden sm:block">NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span></span>
+            <span class="font-semibold text-lg tracking-tight hidden sm:block">TheatreNet<span class="font-normal text-gray-500"> | Knowledge Graph</span></span>
         </a>
         <div class="flex items-center gap-6">
             <div id="db-status-badge" class="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 border border-gray-200 rounded-full cursor-pointer" onclick="openLoginModal()">
@@ -509,7 +509,7 @@
             </div>
             <nav class="hidden md:flex gap-6 text-sm font-medium">
                 <a href="index.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Home</a>
-                <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+                <a href="visualizations.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
                 <a href="#" class="text-[var(--primary-color)] font-bold">Timeline</a>
                 <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
                 <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
@@ -635,7 +635,7 @@
 
         // Variabili globali
         let driver;
-        const NEO4J_URI = 'neo4j+s://archiuidev.promemoriagroup.com:7687';
+        const NEO4J_URI = 'bolt://archiuidev.promemoriagroup.com:7687';
         
         // Stato dell'applicazione
         let currentState = {

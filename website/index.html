@@ -91,13 +91,13 @@
         <path d="M22 15h6v20h-6z"/>
       </svg>
       <span class="font-semibold text-lg tracking-tight hidden sm:block">
-        NeoTheatre <span class="font-normal text-gray-500">| Knowledge Graph</span>
+        TheatreNet <span class="font-normal text-gray-500">| Knowledge Graph</span>
       </span>
     </a>
 
     <nav class="hidden md:flex gap-6 text-sm font-medium">
       <a href="index.html" class="text-[var(--primary-color)] font-bold">Home</a>
-      <a href="dashboard2.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
+      <a href="visualizations.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Visualizations</a>
       <a href="timeline.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Timeline</a>
       <a href="queries.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">Queries</a>
       <a href="api.html" class="text-gray-500 hover:text-[var(--primary-color)] transition-colors">API</a>
@@ -143,7 +143,7 @@
             <span class="w-2 h-2 rounded-full bg-blue-500"></span> Cypher
           </span>
           <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
-            <span class="w-2 h-2 rounded-full bg-yellow-500"></span> UI BOOOOOOOOO
+            <span class="w-2 h-2 rounded-full bg-yellow-500"></span> UI interattiva
           </span>
         </div>
       </div>
@@ -301,90 +301,78 @@
       </div>
     </section>
 
-  <!-- METODO / COME FUNZIONA (senza box) -->
-<section class="container mx-auto px-6">
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+  <!-- METODO / COME FUNZIONA (FULL WIDTH) -->
+<section class="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] bg-gray-50 py-20">
+  <div class="container mx-auto px-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
 
-    <div class="lg:col-span-7">
-      <h2 class="typog-header2 mb-4">Come funziona (in pratica)</h2>
-      <p class="text-gray-600 leading-relaxed mb-6">
-        Qui non navighi “pagine isolate”, ma un grafo: ogni entità (persona, opera, produzione, recita)
-        è un nodo; i legami tra loro (ha diretto, ha interpretato, è collegato a…) sono relazioni.
-        Questo permette di passare dal catalogo alla rete: esplorare, confrontare e scoprire percorsi.
-      </p>
+      <div class="lg:col-span-12">
+        <h2 class="typog-header2 mb-4">Come funziona (in pratica)</h2>
+        <p class="text-gray-600 leading-relaxed mb-10 max-w-3xl">
+          Qui non navighi pagine isolate, ma un grafo: ogni entità (persona, opera, produzione, recita)
+          è un nodo; i legami tra loro (ha diretto, ha interpretato, è collegato a…) sono relazioni.
+          Questo permette di passare dal catalogo alla rete: esplorare, confrontare e scoprire percorsi.
+        </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
-          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
-            <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-[var(--primary-color)]"></i>
-            Navigazione
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="p-6 rounded-xl border border-gray-200 bg-white">
+            <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+              <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-[var(--primary-color)]"></i>
+              Navigazione
+            </div>
+            <p class="text-gray-600 text-sm leading-relaxed">
+              Parti da una scheda e “salti” tra entità collegate: persone ↔ ruoli ↔ produzioni ↔ opere.
+            </p>
           </div>
-          <p class="text-gray-600 text-sm leading-relaxed">
-            Parti da una scheda e “salti” tra entità collegate: persone ↔ ruoli ↔ produzioni ↔ opere.
-          </p>
+
+          <div class="p-6 rounded-xl border border-gray-200 bg-white">
+            <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+              <i data-lucide="filter" class="w-4 h-4 text-[var(--primary-color)]"></i>
+              Interrogazione
+            </div>
+            <p class="text-gray-600 text-sm leading-relaxed">
+              Le viste (timeline e dashboard) sono calcolate “on demand” con query Cypher su Neo4j.
+            </p>
+          </div>
+
+          <div class="p-6 rounded-xl border border-gray-200 bg-white">
+            <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+              <i data-lucide="git-branch" class="w-4 h-4 text-[var(--primary-color)]"></i>
+              Integrazione archivi
+            </div>
+            <p class="text-gray-600 text-sm leading-relaxed">
+              I dati provengono da due istituzioni: il valore è nella comparazione e nei collegamenti.
+            </p>
+          </div>
+
+          <div class="p-6 rounded-xl border border-gray-200 bg-white">
+            <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
+              <i data-lucide="shield-check" class="w-4 h-4 text-[var(--primary-color)]"></i>
+              Trasparenza
+            </div>
+            <p class="text-gray-600 text-sm leading-relaxed">
+              Le query principali sono documentate e replicabili: puoi vedere “da dove esce” ogni vista.
+            </p>
+          </div>
         </div>
 
-        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
-          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
-            <i data-lucide="filter" class="w-4 h-4 text-[var(--primary-color)]"></i>
-            Interrogazione
-          </div>
-          <p class="text-gray-600 text-sm leading-relaxed">
-            Le viste (timeline e dashboard) sono calcolate “on demand” con query Cypher su Neo4j.
-          </p>
-        </div>
-
-        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
-          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
-            <i data-lucide="git-branch" class="w-4 h-4 text-[var(--primary-color)]"></i>
-            Integrazione archivi
-          </div>
-          <p class="text-gray-600 text-sm leading-relaxed">
-            I dati provengono da due istituzioni: il valore è nella comparazione e nei collegamenti.
-          </p>
-        </div>
-
-        <div class="p-5 rounded-xl border border-gray-200 bg-gray-50">
-          <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-500 mb-2">
-            <i data-lucide="shield-check" class="w-4 h-4 text-[var(--primary-color)]"></i>
-            Trasparenza
-          </div>
-          <p class="text-gray-600 text-sm leading-relaxed">
-            Le query principali sono documentate e replicabili: puoi vedere “da dove esce” ogni vista.
-          </p>
-        </div>
-      </div>
-
-      <div class="mt-8 flex flex-wrap gap-3">
-        <a href="dashboard2.html" class="btn btn-primary">
-          <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Vai alle visualizzazioni
-        </a>
-        <a href="queries.html" class="btn btn-outline">
-          <i data-lucide="search" class="w-4 h-4"></i> Prova la ricerca
-        </a>
-      </div>
-    </div>
-
-    <div class="lg:col-span-5">
-      <div class="rounded-xl border border-gray-200 bg-[#0f0f10] p-6 text-white shadow-xl">
-        <div class="flex items-center justify-between">
-          <div class="text-xs uppercase tracking-widest text-gray-300">Esempio di query (Cypher)</div>
-          <a href="queries.html" class="text-xs font-bold uppercase text-[var(--primary-color)] hover:underline">
-            Apri Queries →
+        <div class="mt-10 flex flex-wrap gap-4">
+          <a href="dashboard2.html" class="btn btn-primary">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+            Vai alle visualizzazioni
+          </a>
+          <a href="queries.html" class="btn btn-outline">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            Prova la ricerca
           </a>
         </div>
-
-        <pre class="mt-4 text-[11px] leading-relaxed text-gray-200 font-mono whitespace-pre-wrap">
-MATCH (p:Person)-[r:PERFORMED_IN|CONDUCTED|DIRECTED]->(pr:Production)
-MATCH (pr)-[:RELATED_TO_WORK]->(w:Work)
-RETURN p, r, pr, w
-ORDER BY rand()
-LIMIT 30</pre>
       </div>
-    </div>
 
+    </div>
   </div>
 </section>
+
+
 
 
 
