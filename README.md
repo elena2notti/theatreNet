@@ -83,7 +83,7 @@ Dataset preparation and modeling workflows specific to Fondazione I Teatri.
 
 ---
 
-### `pulizia/`
+### `normalization/`
 Data cleaning and preprocessing layer.
 
 Includes:
