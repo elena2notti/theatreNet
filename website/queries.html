@@ -367,7 +367,6 @@ MATCH (perf)-[r2:RELATED_TO_WORK]->(w:Work)
 // Trova il Direttore d'Orchestra
 OPTIONAL MATCH (direttore:Person)-[r3:CONDUCTED]->(perf)
 
-// IMPORTANTE: Restituisci le relazioni per disegnarle!
 RETURN luciano, r1, perf, r2, w, direttore, r3
 LIMIT 50
 </textarea>
